@@ -9,6 +9,7 @@ Binding :: struct {
 	key:       CG_Key_Code,
 	bundle_id: cstring,
 }
+DefaultBindings :: "com.mitchellh.ghostty\ncom.google.Chrome\ncom.spotify.client\n"
 
 keys := [?]CG_Key_Code{kVK_ANSI_1, kVK_ANSI_2, kVK_ANSI_3}
 bindings: [dynamic]Binding
@@ -59,7 +60,18 @@ read_bindings :: proc() {
 		fmt.println("[harp] HOME not set")
 		return
 	}
-	path := strings.join({home, "/.config/harp/bindings"}, "")
+	dir := strings.join({home, "/.config/harp"}, "")
+	path := strings.join({dir, "/bindings"}, "")
+
+	if !os.exists(dir) {
+		err := os.make_directory(dir)
+		if err != nil {panic("failed to make harp directory")}
+	}
+	if !os.exists(path) {
+		ok := os.write_entire_file(path, transmute([]byte)string(DefaultBindings))
+		if !ok {panic("failed to create bindings file")}
+		fmt.println("[harp] created default config at", path)
+	}
 
 	data, ok := os.read_entire_file(path)
 	if !ok {
@@ -69,12 +81,13 @@ read_bindings :: proc() {
 	defer delete(data)
 
 	clear(&bindings)
-	lines := strings.split_lines(string(data))
-	defer delete(lines)
+	str := string(data)
+	i := 0
 
-	for line, i in lines {
+	for line in strings.split_lines_iterator(&str) {
+		defer i += 1
 		trimmed := strings.trim_space(line)
-		if trimmed == "" || i >= len(keys) do continue
+		if len(trimmed) == 0 || i >= len(keys) {continue}
 		append(&bindings, Binding{key = keys[i], bundle_id = strings.clone_to_cstring(trimmed)})
 	}
 }
