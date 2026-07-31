@@ -1,0 +1,5 @@
+[] Harpoon bindings
+[] Duplicate apps as different bindings
+[] List of active bindings
+[] Detach runtime from a terminal window
+[] Config file
