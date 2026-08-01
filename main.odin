@@ -31,11 +31,11 @@ is_installed :: proc() -> bool {
 
 main :: proc() {
 	bindings = make([dynamic]Binding)
+
 	defer {
 		for b in bindings do delete(string(b.bundle_id))
 		delete(bindings)
 	}
-
 	read_bindings()
 
 	if len(bindings) == 0 {
@@ -56,13 +56,11 @@ main :: proc() {
 			Binding{key = kVK_ANSI_3, bundle_id = strings.clone_to_cstring("com.spotify.client")},
 		)
 	}
-
 	if platform_check_accessibility() == 0 {
 		fmt.println("[harp] Accessibility permission required.")
 		fmt.println("       System Settings → Privacy & Security → Accessibility")
 		fmt.println("       Then relaunch.")
 	}
-
 	g_tap = CGEventTapCreate(
 		kCGSessionEventTap,
 		kCGHeadInsertEventTap,
@@ -71,12 +69,10 @@ main :: proc() {
 		on_key,
 		nil,
 	)
-
 	if g_tap == nil {
 		fmt.println("[harp] failed to create event tap.")
 		return
 	}
-
 	src := CFMachPortCreateRunLoopSource(kCFAllocatorDefault, g_tap, 0)
 	CFRunLoopAddSource(CFRunLoopGetCurrent(), src, kCFRunLoopCommonModes)
 	CGEventTapEnable(g_tap, true)
@@ -92,10 +88,9 @@ read_bindings :: proc() {
 		fmt.println("[harp] HOME not set")
 		return
 	}
-
 	dir := strings.join({home, "/.config/harp"}, "")
-	defer delete(dir)
 	path := strings.join({dir, "/bindings"}, "")
+	defer delete(dir)
 	defer delete(path)
 
 	if !os.exists(dir) {
@@ -107,7 +102,6 @@ read_bindings :: proc() {
 		if !ok {panic("failed to create bindings file")}
 		fmt.println("[harp] created default config at", path)
 	}
-
 	data, ok := os.read_entire_file(path)
 	if !ok {
 		fmt.println("[harp] no config found at", path)
@@ -133,7 +127,6 @@ read_bindings :: proc() {
 		append(&bindings, Binding{key = keys[i], bundle_id = strings.clone_to_cstring(trimmed)})
 		i += 1
 	}
-
 	if skipped > 0 {
 		fmt.printf("[harp] warning: %d binding(s) ignored (max %d)\n", skipped, MAX_BINDINGS)
 	}
@@ -150,7 +143,6 @@ switch_to :: proc(bundle_id: cstring) {
 			return
 		}
 	}
-
 	platform_fill_window(pid, platform_screen_rect())
 }
 
@@ -166,7 +158,6 @@ on_key :: proc "c" (
 		if g_tap != nil do CGEventTapEnable(g_tap, true)
 		return event
 	}
-
 	flags := CGEventGetFlags(event)
 	keycode := CG_Key_Code(CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode))
 
@@ -185,7 +176,6 @@ on_key :: proc "c" (
 			return nil
 		}
 	}
-
 	fmt.printf("[harp] cmd+0x%x (no binding)\n", keycode)
 	return event
 }
