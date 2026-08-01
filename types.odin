@@ -50,6 +50,7 @@ kCGEventFlagMaskAlternate: CG_Event_Flags : 0x00080000
 
 kVK_Escape: CG_Key_Code : 0x35
 kVK_Return: CG_Key_Code : 0x24
+kVK_Space: CG_Key_Code : 0x31
 
 // Numbers
 kVK_ANSI_0: CG_Key_Code : 0x1D
@@ -134,7 +135,8 @@ foreign platform {
 	platform_launch_app :: proc "c" (bundle_id: cstring) -> i32 ---
 	platform_screen_rect :: proc "c" () -> CG_Rect ---
 	platform_fill_window :: proc "c" (pid: i32, rect: CG_Rect) ---
-	platform_show_overlay :: proc "c" (keys: [^]cstring, names: [^]cstring, count: i32, active: i32) ---
+	platform_show_overlay :: proc "c" (keys: [^]cstring, names: [^]cstring, states: [^]i32, count: i32, active: i32) ---
 	platform_set_overlay_active :: proc "c" (active: i32) ---
+	platform_redraw_overlay :: proc "c" () ---
 	platform_hide_overlay :: proc "c" () ---
 }

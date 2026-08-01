@@ -100,10 +100,18 @@ const char *platform_frontmost_app(void) {
 #define KG_FG    [NSColor colorWithRed:0xc0/255.0 green:0xca/255.0 blue:0xf5/255.0 alpha:1.0]
 #define KG_DIM   [NSColor colorWithRed:0x56/255.0 green:0x5f/255.0 blue:0x89/255.0 alpha:1.0]
 #define KG_ACT   [NSColor colorWithRed:0x7d/255.0 green:0xcf/255.0 blue:0xff/255.0 alpha:1.0]
+#define KG_MOV   [NSColor colorWithRed:0xe6/255.0 green:0xc3/255.0 blue:0x84/255.0 alpha:1.0]  // Kanagawa yellow — moving
+#define KG_DEL   [NSColor colorWithRed:0xff/255.0 green:0x5d/255.0 blue:0x62/255.0 alpha:1.0]  // Kanagawa red — deleting
+
+// Item states — must match Odin enum order.
+#define ITEM_STATE_NONE     0
+#define ITEM_STATE_MOVING   1
+#define ITEM_STATE_DELETING 2
 
 static NSPanel  *g_overlay      = nil;
 static NSArray  *g_overlay_keys = nil;
 static NSArray  *g_overlay_names= nil;
+static NSArray  *g_overlay_states = nil;
 static int       g_active       = 0;
 
 @interface HarpOverlayView : NSView
@@ -154,17 +162,34 @@ static int       g_active       = 0;
 
   for (NSUInteger i = 0; i < count; i++) {
     CGFloat y = h - pad_y - (i + 1) * row_h + 8;
-    BOOL active = ((int)i == g_active);
+    BOOL cursor = ((int)i == g_active);
+    int state = g_overlay_states ? [g_overlay_states[i] intValue] : ITEM_STATE_NONE;
 
-    // Highlight bar for active row
-    if (active) {
+    NSColor *item_color;
+    switch (state) {
+      case ITEM_STATE_MOVING:   item_color = KG_MOV; break;
+      case ITEM_STATE_DELETING: item_color = KG_DEL; break;
+      default:                  item_color = KG_FG;  break;
+    }
+
+    // Highlight bar for cursor row
+    if (cursor) {
       [KG_HL setFill];
       NSRectFill(NSMakeRect(2, y - 6, w - 4, row_h - 4));
     }
 
-    [g_overlay_keys[i]  drawAtPoint:NSMakePoint(pad_x,      y) withAttributes:active ? key_active  : key_base];
+    NSDictionary *row_attrs_key = @{
+      NSFontAttributeName: [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightBold],
+      NSForegroundColorAttributeName: item_color,
+    };
+    NSDictionary *row_attrs_name = @{
+      NSFontAttributeName: [NSFont systemFontOfSize:13 weight:NSFontWeightRegular],
+      NSForegroundColorAttributeName: item_color,
+    };
+
+    [g_overlay_keys[i]  drawAtPoint:NSMakePoint(pad_x,      y) withAttributes:row_attrs_key];
     [@"→"               drawAtPoint:NSMakePoint(pad_x + 36, y) withAttributes:arrow_attrs];
-    [g_overlay_names[i] drawAtPoint:NSMakePoint(pad_x + 60, y) withAttributes:active ? name_active : name_base];
+    [g_overlay_names[i] drawAtPoint:NSMakePoint(pad_x + 60, y) withAttributes:row_attrs_name];
   }
 }
 
@@ -178,19 +203,22 @@ static int       g_active       = 0;
 
 @end
 
-void platform_show_overlay(const char **keys, const char **names, int count, int active) {
-  // Copy strings before dispatch — caller's stack may be gone by the time block runs.
+void platform_show_overlay(const char **keys, const char **names, const int *states, int count, int active) {
+  // Copy before dispatch — caller's stack may be gone by the time block runs.
   NSMutableArray *ks = [NSMutableArray arrayWithCapacity:count];
   NSMutableArray *ns = [NSMutableArray arrayWithCapacity:count];
+  NSMutableArray *ss = [NSMutableArray arrayWithCapacity:count];
   for (int i = 0; i < count; i++) {
     [ks addObject:[NSString stringWithUTF8String:keys[i]]];
     [ns addObject:[NSString stringWithUTF8String:names[i]]];
+    [ss addObject:@(states[i])];
   }
 
   dispatch_async(dispatch_get_main_queue(), ^{
-    g_overlay_keys  = ks;
-    g_overlay_names = ns;
-    g_active        = active;
+    g_overlay_keys   = ks;
+    g_overlay_names  = ns;
+    g_overlay_states = ss;
+    g_active         = active;
 
     NSRect screen = [NSScreen mainScreen].visibleFrame;
     CGFloat w = 480, h = 320;
@@ -221,6 +249,12 @@ void platform_show_overlay(const char **keys, const char **names, int count, int
 void platform_set_overlay_active(int active) {
   dispatch_async(dispatch_get_main_queue(), ^{
     g_active = active;
+    [g_overlay.contentView setNeedsDisplay:YES];
+  });
+}
+
+void platform_redraw_overlay(void) {
+  dispatch_async(dispatch_get_main_queue(), ^{
     [g_overlay.contentView setNeedsDisplay:YES];
   });
 }

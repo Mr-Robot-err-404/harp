@@ -15,14 +15,19 @@ MAX_BINDINGS :: 36
 bindings: [dynamic]Binding
 g_tap: CF_Mach_Port_Ref
 
+Item_State :: enum i32 {
+	None     = 0,
+	Moving   = 1,
+	Deleting = 2,
+}
 Overlay :: struct {
 	open:   bool,
 	active: i32,
 	keys:   [MAX_BINDINGS]cstring,
 	names:  [MAX_BINDINGS]cstring,
+	states: [MAX_BINDINGS]i32,
 }
 overlay: Overlay
-
 
 main :: proc() {
 	if !is_setup() {setup()}
@@ -99,6 +104,16 @@ on_key :: proc "c" (
 			platform_hide_overlay()
 			switch_to(bindings[overlay.active].bundle_id)
 
+		case kVK_Space:
+			state := Item_State(overlay.states[overlay.active])
+			switch state {
+			case .None:
+				overlay.states[overlay.active] = i32(Item_State.Moving)
+			case .Moving, .Deleting:
+				overlay.states[overlay.active] = i32(Item_State.None)
+			}
+			platform_redraw_overlay()
+
 		case kVK_Escape:
 			overlay.open = false
 			platform_hide_overlay()
@@ -118,7 +133,13 @@ on_key :: proc "c" (
 		idx := active_binding_idx()
 		overlay.active = idx
 		overlay.open = true
-		platform_show_overlay(&overlay.keys[0], &overlay.names[0], i32(len(bindings)), idx)
+		platform_show_overlay(
+			&overlay.keys[0],
+			&overlay.names[0],
+			&overlay.states[0],
+			i32(len(bindings)),
+			idx,
+		)
 		return nil
 	}
 	for b in bindings {
@@ -143,6 +164,7 @@ build_overlay_data :: proc() {
 	for i in 0 ..< len(bindings) {
 		overlay.keys[i] = LABELS[i]
 		overlay.names[i] = bindings[i].bundle_id
+		overlay.states[i] = i32(Item_State.None)
 	}
 }
 
