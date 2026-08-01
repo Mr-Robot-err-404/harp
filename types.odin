@@ -130,4 +130,6 @@ foreign platform {
 	platform_launch_app :: proc "c" (bundle_id: cstring) -> i32 ---
 	platform_screen_rect :: proc "c" () -> CG_Rect ---
 	platform_fill_window :: proc "c" (pid: i32, rect: CG_Rect) ---
+	platform_show_overlay :: proc "c" () ---
+	platform_hide_overlay :: proc "c" () ---
 }

@@ -85,6 +85,80 @@ static AXUIElementRef find_window(AXUIElementRef ax_app) {
   return window;
 }
 
+// ---------------------------------------------------------------------------
+// Overlay
+// ---------------------------------------------------------------------------
+
+static NSPanel *g_overlay = nil;
+
+@interface HarpOverlayView : NSView
+@end
+
+@implementation HarpOverlayView
+
+- (void)drawRect:(NSRect)dirtyRect {
+  // Background — Tokyo Night/Kanagawa dark
+  [[NSColor colorWithRed:0x1a/255.0 green:0x1b/255.0 blue:0x26/255.0 alpha:1.0] setFill];
+  NSRectFill(self.bounds);
+
+  // Left + right accent borders — Kanagawa cyan
+  NSColor *border = [NSColor colorWithRed:0x2D/255.0 green:0x4F/255.0 blue:0x67/255.0 alpha:1.0];
+  [border setFill];
+  CGFloat t = 2.0;
+  NSRectFill(NSMakeRect(0, 0, t, self.bounds.size.height));
+  NSRectFill(NSMakeRect(self.bounds.size.width - t, 0, t, self.bounds.size.height));
+}
+
+- (BOOL)acceptsFirstResponder { return YES; }
+
+- (void)keyDown:(NSEvent *)event {
+  if (event.keyCode == 53) { // Escape
+    [g_overlay orderOut:nil];
+  }
+}
+
+@end
+
+void platform_show_overlay(void) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    if (g_overlay && g_overlay.isVisible) {
+      [g_overlay orderOut:nil];
+      return;
+    }
+
+    NSRect screen = [NSScreen mainScreen].visibleFrame;
+    CGFloat w = 480, h = 320;
+    NSRect frame = NSMakeRect(NSMidX(screen) - w / 2, NSMidY(screen) - h / 2, w, h);
+
+    if (!g_overlay) {
+      g_overlay = [[NSPanel alloc]
+          initWithContentRect:frame
+                    styleMask:NSWindowStyleMaskNonactivatingPanel | NSWindowStyleMaskBorderless
+                      backing:NSBackingStoreBuffered
+                        defer:NO];
+      g_overlay.level             = NSFloatingWindowLevel;
+      g_overlay.backgroundColor   = [NSColor colorWithRed:0x1a/255.0 green:0x1b/255.0 blue:0x26/255.0 alpha:1.0];
+      g_overlay.opaque             = YES;
+      g_overlay.hasShadow          = NO;
+      g_overlay.releasedWhenClosed = NO;
+
+      HarpOverlayView *view = [[HarpOverlayView alloc] initWithFrame:NSMakeRect(0, 0, w, h)];
+      g_overlay.contentView = view;
+    }
+
+    [g_overlay orderFrontRegardless];
+    [g_overlay makeFirstResponder:g_overlay.contentView];
+  });
+}
+
+void platform_hide_overlay(void) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [g_overlay orderOut:nil];
+  });
+}
+
+// ---------------------------------------------------------------------------
+
 void platform_fill_window(int pid, CGRect rect) {
   AXUIElementRef ax_app = AXUIElementCreateApplication((pid_t)pid);
 

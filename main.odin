@@ -185,6 +185,11 @@ on_key :: proc "c" (
 
 	if !cmd_only do return event
 
+	if keycode == kVK_ANSI_Semicolon {
+		platform_show_overlay()
+		return nil
+	}
+
 	for b in bindings {
 		if keycode == b.key {
 			fmt.printf("[harp] key 0x%x matched -> %s\n", keycode, b.bundle_id)
