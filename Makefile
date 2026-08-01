@@ -3,7 +3,7 @@ SHIM       = platform/macos.o
 FRAMEWORKS = -Wl,-framework,Cocoa,-framework,ApplicationServices,-framework,CoreGraphics,-framework,CoreFoundation,-framework,Carbon,-F/System/Library/PrivateFrameworks,-framework,SkyLight
 
 INSTALL_BIN   = /usr/local/bin/harp
-PLIST_ID      = com.harrylawton.harp
+PLIST_ID      = com.mr_robot.harp
 PLIST_SRC     = $(PLIST_ID).plist
 PLIST_DEST    = $(HOME)/Library/LaunchAgents/$(PLIST_ID).plist
 

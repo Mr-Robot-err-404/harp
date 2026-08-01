@@ -2,6 +2,7 @@ package harp
 
 import "core:fmt"
 import "core:os"
+import "core:os/os2"
 import "core:strings"
 
 Binding :: struct {
@@ -37,30 +38,16 @@ main :: proc() {
 		delete(bindings)
 	}
 	read_bindings()
+	if len(bindings) == 0 {use_default_bindings(&bindings)}
 
-	if len(bindings) == 0 {
-		fmt.println("[harp] no bindings loaded, using defaults")
-		append(
-			&bindings,
-			Binding {
-				key = kVK_ANSI_1,
-				bundle_id = strings.clone_to_cstring("com.mitchellh.ghostty"),
-			},
-		)
-		append(
-			&bindings,
-			Binding{key = kVK_ANSI_2, bundle_id = strings.clone_to_cstring("com.google.Chrome")},
-		)
-		append(
-			&bindings,
-			Binding{key = kVK_ANSI_3, bundle_id = strings.clone_to_cstring("com.spotify.client")},
-		)
-	}
 	if platform_check_accessibility() == 0 {
 		fmt.println("[harp] Accessibility permission required.")
 		fmt.println("       System Settings → Privacy & Security → Accessibility")
 		fmt.println("       Then relaunch.")
+		return
 	}
+	disable_stage_manager()
+
 	g_tap = CGEventTapCreate(
 		kCGSessionEventTap,
 		kCGHeadInsertEventTap,
@@ -178,4 +165,39 @@ on_key :: proc "c" (
 	}
 	fmt.printf("[harp] cmd+0x%x (no binding)\n", keycode)
 	return event
+}
+
+disable_stage_manager :: proc() {
+	_, err := os2.process_start(
+		{
+			command = {
+				"defaults",
+				"write",
+				"com.apple.WindowManager",
+				"GloballyEnabled",
+				"-bool",
+				"false",
+			},
+		},
+	)
+	switch err {
+	case os2.ERROR_NONE:
+	case:
+		panic("failed to disable macos stage manager")
+	}
+}
+
+use_default_bindings :: proc(bindings: ^[dynamic]Binding) {
+	append(
+		bindings,
+		Binding{key = kVK_ANSI_1, bundle_id = strings.clone_to_cstring("com.mitchellh.ghostty")},
+	)
+	append(
+		bindings,
+		Binding{key = kVK_ANSI_2, bundle_id = strings.clone_to_cstring("com.google.Chrome")},
+	)
+	append(
+		bindings,
+		Binding{key = kVK_ANSI_3, bundle_id = strings.clone_to_cstring("com.spotify.client")},
+	)
 }
