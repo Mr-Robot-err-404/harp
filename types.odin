@@ -51,6 +51,12 @@ kCGEventFlagMaskAlternate: CG_Event_Flags : 0x00080000
 kVK_ANSI_1: CG_Key_Code : 0x12
 kVK_ANSI_2: CG_Key_Code : 0x13
 kVK_ANSI_3: CG_Key_Code : 0x14
+kVK_ANSI_4: CG_Key_Code : 0x15
+kVK_ANSI_5: CG_Key_Code : 0x17
+kVK_ANSI_6: CG_Key_Code : 0x16
+kVK_ANSI_7: CG_Key_Code : 0x1A
+kVK_ANSI_8: CG_Key_Code : 0x1C
+kVK_ANSI_9: CG_Key_Code : 0x19
 
 cg_event_mask_bit :: #force_inline proc(t: CG_Event_Type) -> CG_Event_Mask {
 	return CG_Event_Mask(1) << t
@@ -82,7 +88,6 @@ foreign platform {
 	platform_check_accessibility :: proc "c" () -> i32 ---
 	platform_find_app :: proc "c" (bundle_id: cstring) -> i32 ---
 	platform_launch_app :: proc "c" (bundle_id: cstring) -> i32 ---
-	platform_activate_app :: proc "c" (pid: i32) ---
 	platform_screen_rect :: proc "c" () -> CG_Rect ---
 	platform_fill_window :: proc "c" (pid: i32, rect: CG_Rect) ---
 }

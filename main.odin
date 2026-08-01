@@ -3,7 +3,6 @@ package harp
 import "core:fmt"
 import "core:os"
 import "core:strings"
-import "core:time"
 
 Binding :: struct {
 	key:       CG_Key_Code,
@@ -11,19 +10,29 @@ Binding :: struct {
 }
 DefaultBindings :: "com.mitchellh.ghostty\ncom.google.Chrome\ncom.spotify.client\n"
 
-keys := [?]CG_Key_Code{kVK_ANSI_1, kVK_ANSI_2, kVK_ANSI_3}
+MAX_BINDINGS :: 9
+keys := [MAX_BINDINGS]CG_Key_Code{
+	kVK_ANSI_1, kVK_ANSI_2, kVK_ANSI_3,
+	kVK_ANSI_4, kVK_ANSI_5, kVK_ANSI_6,
+	kVK_ANSI_7, kVK_ANSI_8, kVK_ANSI_9,
+}
 bindings: [dynamic]Binding
 g_tap: CF_Mach_Port_Ref
 
 main :: proc() {
 	bindings = make([dynamic]Binding)
+	defer {
+		for b in bindings do delete(string(b.bundle_id))
+		delete(bindings)
+	}
+
 	read_bindings()
 
 	if len(bindings) == 0 {
 		fmt.println("[harp] no bindings loaded, using defaults")
-		append(&bindings, Binding{key = kVK_ANSI_1, bundle_id = "com.mitchellh.ghostty"})
-		append(&bindings, Binding{key = kVK_ANSI_2, bundle_id = "com.google.Chrome"})
-		append(&bindings, Binding{key = kVK_ANSI_3, bundle_id = "com.spotify.client"})
+		append(&bindings, Binding{key = kVK_ANSI_1, bundle_id = strings.clone_to_cstring("com.mitchellh.ghostty")})
+		append(&bindings, Binding{key = kVK_ANSI_2, bundle_id = strings.clone_to_cstring("com.google.Chrome")})
+		append(&bindings, Binding{key = kVK_ANSI_3, bundle_id = strings.clone_to_cstring("com.spotify.client")})
 	}
 
 	if platform_check_accessibility() == 0 {
@@ -56,12 +65,16 @@ main :: proc() {
 
 read_bindings :: proc() {
 	home := os.get_env("HOME")
+	defer delete(home)
 	if home == "" {
 		fmt.println("[harp] HOME not set")
 		return
 	}
-	dir := strings.join({home, "/.config/harp"}, "")
+
+	dir  := strings.join({home, "/.config/harp"}, "")
+	defer delete(dir)
 	path := strings.join({dir, "/bindings"}, "")
+	defer delete(path)
 
 	if !os.exists(dir) {
 		err := os.make_directory(dir)
@@ -80,15 +93,27 @@ read_bindings :: proc() {
 	}
 	defer delete(data)
 
+	// Free any previously cloned cstrings before repopulating.
+	for b in bindings do delete(string(b.bundle_id))
 	clear(&bindings)
+
 	str := string(data)
-	i := 0
+	i   := 0
+	skipped := 0
 
 	for line in strings.split_lines_iterator(&str) {
-		defer i += 1
 		trimmed := strings.trim_space(line)
-		if len(trimmed) == 0 || i >= len(keys) {continue}
+		if len(trimmed) == 0 {continue}
+		if i >= MAX_BINDINGS {
+			skipped += 1
+			continue
+		}
 		append(&bindings, Binding{key = keys[i], bundle_id = strings.clone_to_cstring(trimmed)})
+		i += 1
+	}
+
+	if skipped > 0 {
+		fmt.printf("[harp] warning: %d binding(s) ignored (max %d)\n", skipped, MAX_BINDINGS)
 	}
 }
 
@@ -102,10 +127,8 @@ switch_to :: proc(bundle_id: cstring) {
 			fmt.println("[harp] failed to launch", bundle_id)
 			return
 		}
-		time.sleep(500 * time.Millisecond)
 	}
 
-	platform_activate_app(pid)
 	platform_fill_window(pid, platform_screen_rect())
 }
 
@@ -135,9 +158,12 @@ on_key :: proc "c" (
 
 	for b in bindings {
 		if keycode == b.key {
+			fmt.printf("[harp] key 0x%x matched -> %s\n", keycode, b.bundle_id)
 			switch_to(b.bundle_id)
 			return nil
 		}
 	}
+
+	fmt.printf("[harp] cmd+0x%x (no binding)\n", keycode)
 	return event
 }

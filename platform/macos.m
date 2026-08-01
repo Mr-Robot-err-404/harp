@@ -1,7 +1,13 @@
 #import <ApplicationServices/ApplicationServices.h>
 #import <Cocoa/Cocoa.h>
+#include <unistd.h>
 
 #include "api.h"
+
+// Private SkyLight symbols — available without SIP disabled.
+extern int SLSMainConnectionID(void);
+extern CGError SLSDisableUpdate(int cid);
+extern CGError SLSReenableUpdate(int cid);
 
 int platform_check_accessibility(void) {
   NSDictionary *opts = @{(__bridge id)kAXTrustedCheckOptionPrompt : @YES};
@@ -45,32 +51,38 @@ int platform_launch_app(const char *bundle_id) {
   return pid;
 }
 
-void platform_activate_app(int pid) {
-  NSRunningApplication *app =
-      [NSRunningApplication runningApplicationWithProcessIdentifier:(pid_t)pid];
-  [app activateWithOptions:0];
-}
-
 CGRect platform_screen_rect(void) {
   NSRect r = [NSScreen mainScreen].visibleFrame;
   return CGRectMake(r.origin.x, r.origin.y, r.size.width, r.size.height);
+}
+
+static AXUIElementRef find_window(AXUIElementRef ax_app) {
+  AXUIElementRef window = NULL;
+  AXError err = AXUIElementCopyAttributeValue(ax_app, kAXFocusedWindowAttribute,
+                                              (CFTypeRef *)&window);
+  if (err == kAXErrorSuccess && window)
+    return window;
+
+  CFArrayRef windows = NULL;
+  AXUIElementCopyAttributeValue(ax_app, kAXWindowsAttribute,
+                                (CFTypeRef *)&windows);
+  if (windows) {
+    if (CFArrayGetCount(windows) > 0)
+      window = (AXUIElementRef)CFRetain(CFArrayGetValueAtIndex(windows, 0));
+    CFRelease(windows);
+  }
+  return window;
 }
 
 void platform_fill_window(int pid, CGRect rect) {
   AXUIElementRef ax_app = AXUIElementCreateApplication((pid_t)pid);
 
   AXUIElementRef window = NULL;
-  AXError err = AXUIElementCopyAttributeValue(ax_app, kAXFocusedWindowAttribute,
-                                              (CFTypeRef *)&window);
-
-  if (err != kAXErrorSuccess || !window) {
-    CFArrayRef windows = NULL;
-    AXUIElementCopyAttributeValue(ax_app, kAXWindowsAttribute,
-                                  (CFTypeRef *)&windows);
-    if (windows && CFArrayGetCount(windows) > 0)
-      window = (AXUIElementRef)CFRetain(CFArrayGetValueAtIndex(windows, 0));
-    if (windows)
-      CFRelease(windows);
+  // Poll up to 2 seconds in 100ms increments for the window to appear.
+  for (int i = 0; i < 20 && !window; i++) {
+    window = find_window(ax_app);
+    if (!window)
+      usleep(100000);
   }
 
   if (window) {
@@ -80,8 +92,15 @@ void platform_fill_window(int pid, CGRect rect) {
     AXValueRef pos_val = AXValueCreate(kAXValueCGPointType, &origin);
     AXValueRef size_val = AXValueCreate(kAXValueCGSizeType, &size);
 
+    // Freeze the compositor: reposition, resize, raise — all in one frame.
+    int cid = SLSMainConnectionID();
+    SLSDisableUpdate(cid);
+
     AXUIElementSetAttributeValue(window, kAXPositionAttribute, pos_val);
     AXUIElementSetAttributeValue(window, kAXSizeAttribute, size_val);
+    AXUIElementPerformAction(window, kAXRaiseAction);
+
+    SLSReenableUpdate(cid);
 
     CFRelease(pos_val);
     CFRelease(size_val);
