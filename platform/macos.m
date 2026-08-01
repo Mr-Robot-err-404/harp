@@ -16,6 +16,11 @@ extern CGError SLPSPostEventRecordTo(ProcessSerialNumber *psn, uint8_t *bytes);
 #define kCPSUserGenerated 0x200
 
 int platform_check_accessibility(void) {
+  NSDictionary *opts = @{(__bridge id)kAXTrustedCheckOptionPrompt : @NO};
+  return AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)opts) ? 1 : 0;
+}
+
+int platform_request_accessibility(void) {
   NSDictionary *opts = @{(__bridge id)kAXTrustedCheckOptionPrompt : @YES};
   return AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)opts) ? 1 : 0;
 }

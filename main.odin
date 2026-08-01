@@ -2,7 +2,9 @@ package harp
 
 import "core:fmt"
 import "core:os"
+import "core:os/os2"
 import "core:strings"
+import "core:time"
 
 Binding :: struct {
 	key:       CG_Key_Code,
@@ -37,11 +39,13 @@ main :: proc() {
 	read_bindings()
 	if len(bindings) == 0 {use_default_bindings(&bindings)}
 
-	if platform_check_accessibility() == 0 {
-		fmt.println("[harp] Accessibility permission required.")
+	// Prompt once, then poll silently until granted.
+	if platform_request_accessibility() == 0 {
+		fmt.println("[harp] waiting for accessibility permission...")
 		fmt.println("       System Settings → Privacy & Security → Accessibility")
-		fmt.println("       Then relaunch.")
-		return
+		for platform_check_accessibility() == 0 {
+			time.sleep(2 * time.Second)
+		}
 	}
 
 	g_tap = CGEventTapCreate(
@@ -90,8 +94,9 @@ read_bindings :: proc() {
 		fmt.println("[harp] no config found at", path)
 		return
 	}
-	defer delete(data)
+	disable_stage_manager()
 
+	defer delete(data)
 	for b in bindings {
 		delete(string(b.bundle_id))
 	}
@@ -164,6 +169,25 @@ on_key :: proc "c" (
 	return event
 }
 
+disable_stage_manager :: proc() {
+	_, err := os2.process_start(
+		{
+			command = {
+				"defaults",
+				"write",
+				"com.apple.WindowManager",
+				"GloballyEnabled",
+				"-bool",
+				"false",
+			},
+		},
+	)
+	switch err {
+	case os2.ERROR_NONE:
+	case:
+		panic("failed to disable macos stage manager")
+	}
+}
 
 use_default_bindings :: proc(bindings: ^[dynamic]Binding) {
 	append(

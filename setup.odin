@@ -16,6 +16,8 @@ PLIST :: `<?xml version="1.0" encoding="UTF-8"?>
     <array>
         <string>/usr/local/bin/harp</string>
     </array>
+    <key>ProcessType</key>
+    <string>Interactive</string>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -34,11 +36,8 @@ setup :: proc() {
 	if !ok {panic("[harp] failed to write launchd plist")}
 	fmt.println("[harp] launchd plist installed")
 
-	disable_stage_manager()
-	fmt.println("[harp] macos stage manager disabled")
-
 	launchctl_load()
-	fmt.println("[harp] done :: harp window manager is running")
+	fmt.println("[harp] window manager is running")
 	fmt.println("[harp] logs at /tmp/harp.log")
 }
 
@@ -60,10 +59,12 @@ is_setup :: proc() -> bool {
 
 launchctl_load :: proc() {
 	home := os.get_env("HOME")
-	plist := strings.concatenate({home, "/Library/LaunchAgents/", PLIST_ID, ".plist"})
 	defer delete(home)
+	plist := strings.concatenate({home, "/Library/LaunchAgents/", PLIST_ID, ".plist"})
 	defer delete(plist)
-	run_command({"launchctl", "load", plist})
+	uid := os2.get_uid()
+	uid_str := fmt.tprintf("gui/%d", uid)
+	run_command({"launchctl", "bootstrap", uid_str, plist})
 }
 
 run_command :: proc(args: []string) {
@@ -80,26 +81,5 @@ run_command :: proc(args: []string) {
 		case:
 			panic("failed to close process")
 		}
-	}
-}
-
-
-disable_stage_manager :: proc() {
-	_, err := os2.process_start(
-		{
-			command = {
-				"defaults",
-				"write",
-				"com.apple.WindowManager",
-				"GloballyEnabled",
-				"-bool",
-				"false",
-			},
-		},
-	)
-	switch err {
-	case os2.ERROR_NONE:
-	case:
-		panic("failed to disable macos stage manager")
 	}
 }

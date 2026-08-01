@@ -86,6 +86,7 @@ foreign import platform "platform/macos.o"
 @(link_prefix = "")
 foreign platform {
 	platform_check_accessibility :: proc "c" () -> i32 ---
+	platform_request_accessibility :: proc "c" () -> i32 ---
 	platform_find_app :: proc "c" (bundle_id: cstring) -> i32 ---
 	platform_launch_app :: proc "c" (bundle_id: cstring) -> i32 ---
 	platform_screen_rect :: proc "c" () -> CG_Rect ---

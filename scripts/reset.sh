@@ -5,11 +5,14 @@ echo "[reset] stopping daemon..."
 pkill -x harp 2>/dev/null
 
 echo "[reset] unloading launchd agent..."
-launchctl unload ~/Library/LaunchAgents/com.mr_robot.harp.plist 2>/dev/null
+launchctl bootout gui/$(id -u)/com.mr_robot.harp 2>/dev/null
 
 echo "[reset] removing installed files..."
 rm -f /usr/local/bin/harp
 rm -f ~/Library/LaunchAgents/com.mr_robot.harp.plist
+
+echo "[reset] stripping accessibility TCC entry..."
+tccutil reset Accessibility /usr/local/bin/harp 2>/dev/null
 
 echo "[reset] re-enabling stage manager..."
 defaults write com.apple.WindowManager GloballyEnabled -bool true

@@ -4,21 +4,18 @@
 <dict>
     <key>Label</key>
     <string>com.mr_robot.harp</string>
-
     <key>ProgramArguments</key>
     <array>
         <string>/usr/local/bin/harp</string>
     </array>
-
+    <key>ProcessType</key>
+    <string>Interactive</string>
     <key>RunAtLoad</key>
     <true/>
-
     <key>KeepAlive</key>
     <true/>
-
     <key>StandardOutPath</key>
     <string>/tmp/harp.log</string>
-
     <key>StandardErrorPath</key>
     <string>/tmp/harp.log</string>
 </dict>
