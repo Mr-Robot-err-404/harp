@@ -14,4 +14,10 @@ rm -f ~/Library/LaunchAgents/com.mr_robot.harp.plist
 echo "[reset] re-enabling stage manager..."
 defaults write com.apple.WindowManager GloballyEnabled -bool true
 
+echo "[reset] removing harp config..."
+rm -rf ~/.config/harp
+
+echo "[reset] clearing logs..."
+rm -f /tmp/harp.log
+
 echo "[reset] done — run ./harp from the project dir to simulate first-run"

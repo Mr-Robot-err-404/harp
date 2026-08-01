@@ -2,7 +2,6 @@ package harp
 
 import "core:fmt"
 import "core:os"
-import "core:os/os2"
 import "core:strings"
 
 Binding :: struct {
@@ -26,13 +25,11 @@ keys := [MAX_BINDINGS]CG_Key_Code {
 bindings: [dynamic]Binding
 g_tap: CF_Mach_Port_Ref
 
-is_installed :: proc() -> bool {
-	return os.args[0] == "/usr/local/bin/harp"
-}
 
 main :: proc() {
-	bindings = make([dynamic]Binding)
+	if !is_setup() {setup()}
 
+	bindings = make([dynamic]Binding)
 	defer {
 		for b in bindings do delete(string(b.bundle_id))
 		delete(bindings)
@@ -46,7 +43,6 @@ main :: proc() {
 		fmt.println("       Then relaunch.")
 		return
 	}
-	disable_stage_manager()
 
 	g_tap = CGEventTapCreate(
 		kCGSessionEventTap,
@@ -96,8 +92,9 @@ read_bindings :: proc() {
 	}
 	defer delete(data)
 
-	// Free any previously cloned cstrings before repopulating.
-	for b in bindings do delete(string(b.bundle_id))
+	for b in bindings {
+		delete(string(b.bundle_id))
+	}
 	clear(&bindings)
 
 	str := string(data)
@@ -167,25 +164,6 @@ on_key :: proc "c" (
 	return event
 }
 
-disable_stage_manager :: proc() {
-	_, err := os2.process_start(
-		{
-			command = {
-				"defaults",
-				"write",
-				"com.apple.WindowManager",
-				"GloballyEnabled",
-				"-bool",
-				"false",
-			},
-		},
-	)
-	switch err {
-	case os2.ERROR_NONE:
-	case:
-		panic("failed to disable macos stage manager")
-	}
-}
 
 use_default_bindings :: proc(bindings: ^[dynamic]Binding) {
 	append(
