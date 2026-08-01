@@ -11,13 +11,23 @@ Binding :: struct {
 DefaultBindings :: "com.mitchellh.ghostty\ncom.google.Chrome\ncom.spotify.client\n"
 
 MAX_BINDINGS :: 9
-keys := [MAX_BINDINGS]CG_Key_Code{
-	kVK_ANSI_1, kVK_ANSI_2, kVK_ANSI_3,
-	kVK_ANSI_4, kVK_ANSI_5, kVK_ANSI_6,
-	kVK_ANSI_7, kVK_ANSI_8, kVK_ANSI_9,
+keys := [MAX_BINDINGS]CG_Key_Code {
+	kVK_ANSI_1,
+	kVK_ANSI_2,
+	kVK_ANSI_3,
+	kVK_ANSI_4,
+	kVK_ANSI_5,
+	kVK_ANSI_6,
+	kVK_ANSI_7,
+	kVK_ANSI_8,
+	kVK_ANSI_9,
 }
 bindings: [dynamic]Binding
 g_tap: CF_Mach_Port_Ref
+
+is_installed :: proc() -> bool {
+	return os.args[0] == "/usr/local/bin/harp"
+}
 
 main :: proc() {
 	bindings = make([dynamic]Binding)
@@ -30,9 +40,21 @@ main :: proc() {
 
 	if len(bindings) == 0 {
 		fmt.println("[harp] no bindings loaded, using defaults")
-		append(&bindings, Binding{key = kVK_ANSI_1, bundle_id = strings.clone_to_cstring("com.mitchellh.ghostty")})
-		append(&bindings, Binding{key = kVK_ANSI_2, bundle_id = strings.clone_to_cstring("com.google.Chrome")})
-		append(&bindings, Binding{key = kVK_ANSI_3, bundle_id = strings.clone_to_cstring("com.spotify.client")})
+		append(
+			&bindings,
+			Binding {
+				key = kVK_ANSI_1,
+				bundle_id = strings.clone_to_cstring("com.mitchellh.ghostty"),
+			},
+		)
+		append(
+			&bindings,
+			Binding{key = kVK_ANSI_2, bundle_id = strings.clone_to_cstring("com.google.Chrome")},
+		)
+		append(
+			&bindings,
+			Binding{key = kVK_ANSI_3, bundle_id = strings.clone_to_cstring("com.spotify.client")},
+		)
 	}
 
 	if platform_check_accessibility() == 0 {
@@ -71,7 +93,7 @@ read_bindings :: proc() {
 		return
 	}
 
-	dir  := strings.join({home, "/.config/harp"}, "")
+	dir := strings.join({home, "/.config/harp"}, "")
 	defer delete(dir)
 	path := strings.join({dir, "/bindings"}, "")
 	defer delete(path)
@@ -98,7 +120,7 @@ read_bindings :: proc() {
 	clear(&bindings)
 
 	str := string(data)
-	i   := 0
+	i := 0
 	skipped := 0
 
 	for line in strings.split_lines_iterator(&str) {
