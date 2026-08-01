@@ -85,6 +85,11 @@ static AXUIElementRef find_window(AXUIElementRef ax_app) {
   return window;
 }
 
+const char *platform_frontmost_app(void) {
+  NSRunningApplication *app = NSWorkspace.sharedWorkspace.frontmostApplication;
+  return app.bundleIdentifier.UTF8String;
+}
+
 // ---------------------------------------------------------------------------
 // Overlay
 // ---------------------------------------------------------------------------

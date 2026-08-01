@@ -115,9 +115,10 @@ on_key :: proc "c" (
 	if !is_leader_key(flags) {return event}
 
 	if keycode == kVK_ANSI_Semicolon {
+		idx := active_binding_idx()
+		overlay.active = idx
 		overlay.open = true
-		overlay.active = 0
-		platform_show_overlay(&overlay.keys[0], &overlay.names[0], i32(len(bindings)), 0)
+		platform_show_overlay(&overlay.keys[0], &overlay.names[0], i32(len(bindings)), idx)
 		return nil
 	}
 	for b in bindings {
@@ -143,6 +144,16 @@ build_overlay_data :: proc() {
 		overlay.keys[i] = LABELS[i]
 		overlay.names[i] = bindings[i].bundle_id
 	}
+}
+
+active_binding_idx :: proc() -> i32 {
+	id := platform_frontmost_app()
+	for i in 0 ..< len(bindings) {
+		if string(bindings[i].bundle_id) == string(id) {
+			return i32(i)
+		}
+	}
+	return 0
 }
 
 disable_stage_manager :: proc() {
