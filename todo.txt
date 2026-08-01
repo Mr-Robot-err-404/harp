@@ -1,5 +1,6 @@
-[] Harpoon bindings
-[] Duplicate apps as different bindings
-[] List of active bindings
-[] Detach runtime from a terminal window
-[] Config file
+[✔] Detach runtime from a terminal window
+[✔] Keybindings for most keys
+[·] Popup UI
+[·] List of active bindings
+[·] Move / delete from list
+[·] Config file

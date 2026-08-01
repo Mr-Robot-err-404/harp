@@ -48,6 +48,8 @@ kCGEventFlagMaskShift: CG_Event_Flags : 0x00020000
 kCGEventFlagMaskControl: CG_Event_Flags : 0x00040000
 kCGEventFlagMaskAlternate: CG_Event_Flags : 0x00080000
 
+// Numbers
+kVK_ANSI_0: CG_Key_Code : 0x1D
 kVK_ANSI_1: CG_Key_Code : 0x12
 kVK_ANSI_2: CG_Key_Code : 0x13
 kVK_ANSI_3: CG_Key_Code : 0x14
@@ -57,6 +59,43 @@ kVK_ANSI_6: CG_Key_Code : 0x16
 kVK_ANSI_7: CG_Key_Code : 0x1A
 kVK_ANSI_8: CG_Key_Code : 0x1C
 kVK_ANSI_9: CG_Key_Code : 0x19
+
+// Letters
+kVK_ANSI_A: CG_Key_Code : 0x00
+kVK_ANSI_B: CG_Key_Code : 0x0B
+kVK_ANSI_C: CG_Key_Code : 0x08
+kVK_ANSI_D: CG_Key_Code : 0x02
+kVK_ANSI_E: CG_Key_Code : 0x0E
+kVK_ANSI_F: CG_Key_Code : 0x03
+kVK_ANSI_G: CG_Key_Code : 0x05
+kVK_ANSI_H: CG_Key_Code : 0x04
+kVK_ANSI_I: CG_Key_Code : 0x22
+kVK_ANSI_J: CG_Key_Code : 0x26
+kVK_ANSI_K: CG_Key_Code : 0x28
+kVK_ANSI_L: CG_Key_Code : 0x25
+kVK_ANSI_M: CG_Key_Code : 0x2E
+kVK_ANSI_N: CG_Key_Code : 0x2D
+kVK_ANSI_O: CG_Key_Code : 0x1F
+kVK_ANSI_P: CG_Key_Code : 0x23
+kVK_ANSI_Q: CG_Key_Code : 0x0C
+kVK_ANSI_R: CG_Key_Code : 0x0F
+kVK_ANSI_S: CG_Key_Code : 0x01
+kVK_ANSI_T: CG_Key_Code : 0x11
+kVK_ANSI_U: CG_Key_Code : 0x20
+kVK_ANSI_V: CG_Key_Code : 0x09
+kVK_ANSI_W: CG_Key_Code : 0x0D
+kVK_ANSI_X: CG_Key_Code : 0x07
+kVK_ANSI_Y: CG_Key_Code : 0x10
+kVK_ANSI_Z: CG_Key_Code : 0x06
+
+// Symbols
+kVK_ANSI_Comma:        CG_Key_Code : 0x2B  // ,
+kVK_ANSI_Period:       CG_Key_Code : 0x2F  // .
+kVK_ANSI_Slash:        CG_Key_Code : 0x2C  // /
+kVK_ANSI_Semicolon:    CG_Key_Code : 0x29  // ; :
+kVK_ANSI_Quote:        CG_Key_Code : 0x27  // ' "
+kVK_ANSI_Minus:        CG_Key_Code : 0x1B  // - _
+kVK_ANSI_Equal:        CG_Key_Code : 0x18  // = +
 
 cg_event_mask_bit :: #force_inline proc(t: CG_Event_Type) -> CG_Event_Mask {
 	return CG_Event_Mask(1) << t

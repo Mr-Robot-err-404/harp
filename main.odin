@@ -10,10 +10,37 @@ Binding :: struct {
 	key:       CG_Key_Code,
 	bundle_id: cstring,
 }
-DefaultBindings :: "com.mitchellh.ghostty\ncom.google.Chrome\ncom.spotify.client\n"
+DefaultBindings :: "com.mitchellh.ghostty\ncom.google.Chrome\ncom.spotify.client\ncom.hnc.discord\n"
 
-MAX_BINDINGS :: 9
+MAX_BINDINGS :: 36
 keys := [MAX_BINDINGS]CG_Key_Code {
+	kVK_ANSI_H,
+	kVK_ANSI_B,
+	kVK_ANSI_J,
+	kVK_ANSI_K,
+	kVK_ANSI_S,
+	kVK_ANSI_Q,
+	kVK_ANSI_A,
+	kVK_ANSI_C,
+	kVK_ANSI_D,
+	kVK_ANSI_E,
+	kVK_ANSI_F,
+	kVK_ANSI_G,
+	kVK_ANSI_I,
+	kVK_ANSI_L,
+	kVK_ANSI_M,
+	kVK_ANSI_N,
+	kVK_ANSI_O,
+	kVK_ANSI_P,
+	kVK_ANSI_R,
+	kVK_ANSI_T,
+	kVK_ANSI_U,
+	kVK_ANSI_V,
+	kVK_ANSI_W,
+	kVK_ANSI_X,
+	kVK_ANSI_Y,
+	kVK_ANSI_Z,
+	kVK_ANSI_0,
 	kVK_ANSI_1,
 	kVK_ANSI_2,
 	kVK_ANSI_3,
@@ -192,14 +219,18 @@ disable_stage_manager :: proc() {
 use_default_bindings :: proc(bindings: ^[dynamic]Binding) {
 	append(
 		bindings,
-		Binding{key = kVK_ANSI_1, bundle_id = strings.clone_to_cstring("com.mitchellh.ghostty")},
+		Binding{key = kVK_ANSI_H, bundle_id = strings.clone_to_cstring("com.mitchellh.ghostty")},
 	)
 	append(
 		bindings,
-		Binding{key = kVK_ANSI_2, bundle_id = strings.clone_to_cstring("com.google.Chrome")},
+		Binding{key = kVK_ANSI_B, bundle_id = strings.clone_to_cstring("com.google.Chrome")},
 	)
 	append(
 		bindings,
-		Binding{key = kVK_ANSI_3, bundle_id = strings.clone_to_cstring("com.spotify.client")},
+		Binding{key = kVK_ANSI_J, bundle_id = strings.clone_to_cstring("com.spotify.client")},
+	)
+	append(
+		bindings,
+		Binding{key = kVK_ANSI_K, bundle_id = strings.clone_to_cstring("com.hnc.discord")},
 	)
 }
