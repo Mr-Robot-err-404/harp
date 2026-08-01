@@ -54,6 +54,15 @@ keys := [MAX_BINDINGS]CG_Key_Code {
 bindings: [dynamic]Binding
 g_tap: CF_Mach_Port_Ref
 
+Overlay :: struct {
+	open:   bool,
+	active: i32,
+	keys:   [MAX_BINDINGS]cstring,
+	names:  [MAX_BINDINGS]cstring,
+}
+
+overlay: Overlay
+
 
 main :: proc() {
 	if !is_setup() {setup()}
@@ -65,6 +74,7 @@ main :: proc() {
 	}
 	read_bindings()
 	if len(bindings) == 0 {use_default_bindings(&bindings)}
+	build_overlay_data()
 
 	// Prompt once, then poll silently until granted.
 	if platform_request_accessibility() == 0 {
@@ -174,9 +184,27 @@ on_key :: proc "c" (
 		if g_tap != nil do CGEventTapEnable(g_tap, true)
 		return event
 	}
-	flags := CGEventGetFlags(event)
+
 	keycode := CG_Key_Code(CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode))
 
+	// Overlay mode — intercept all keys, no passthrough.
+	if overlay.open {
+		n := i32(len(bindings))
+		switch keycode {
+		case kVK_Escape:
+			overlay.open = false
+			platform_hide_overlay()
+		case kVK_ANSI_J:
+			overlay.active = (overlay.active + 1) % n
+			platform_set_overlay_active(overlay.active)
+		case kVK_ANSI_K:
+			overlay.active = (overlay.active - 1 + n) % n
+			platform_set_overlay_active(overlay.active)
+		}
+		return nil
+	}
+
+	flags := CGEventGetFlags(event)
 	cmd_only :=
 		(flags & kCGEventFlagMaskCommand) != 0 &&
 		(flags & kCGEventFlagMaskShift) == 0 &&
@@ -186,21 +214,65 @@ on_key :: proc "c" (
 	if !cmd_only do return event
 
 	if keycode == kVK_ANSI_Semicolon {
-		ks := [4]cstring{"H", "B", "S", "Q"}
-		ns := [4]cstring{"Ghostty", "Chrome", "Spotify", "Discord"}
-		platform_show_overlay(&ks[0], &ns[0], 4, 0)
+		overlay.open = true
+		overlay.active = 0
+		platform_show_overlay(&overlay.keys[0], &overlay.names[0], i32(len(bindings)), 0)
 		return nil
 	}
 
 	for b in bindings {
 		if keycode == b.key {
-			fmt.printf("[harp] key 0x%x matched -> %s\n", keycode, b.bundle_id)
 			switch_to(b.bundle_id)
 			return nil
 		}
 	}
-	fmt.printf("[harp] cmd+0x%x (no binding)\n", keycode)
 	return event
+}
+
+key_labels := [MAX_BINDINGS]cstring {
+	"H",
+	"B",
+	"J",
+	"K",
+	"S",
+	"Q",
+	"A",
+	"C",
+	"D",
+	"E",
+	"F",
+	"G",
+	"I",
+	"L",
+	"M",
+	"N",
+	"O",
+	"P",
+	"R",
+	"T",
+	"U",
+	"V",
+	"W",
+	"X",
+	"Y",
+	"Z",
+	"0",
+	"1",
+	"2",
+	"3",
+	"4",
+	"5",
+	"6",
+	"7",
+	"8",
+	"9",
+}
+
+build_overlay_data :: proc() {
+	for i in 0 ..< len(bindings) {
+		overlay.keys[i] = key_labels[i]
+		overlay.names[i] = bindings[i].bundle_id
+	}
 }
 
 disable_stage_manager :: proc() {

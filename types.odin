@@ -48,6 +48,8 @@ kCGEventFlagMaskShift: CG_Event_Flags : 0x00020000
 kCGEventFlagMaskControl: CG_Event_Flags : 0x00040000
 kCGEventFlagMaskAlternate: CG_Event_Flags : 0x00080000
 
+kVK_Escape: CG_Key_Code : 0x35
+
 // Numbers
 kVK_ANSI_0: CG_Key_Code : 0x1D
 kVK_ANSI_1: CG_Key_Code : 0x12
