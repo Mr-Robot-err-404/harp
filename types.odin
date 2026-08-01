@@ -49,6 +49,7 @@ kCGEventFlagMaskControl: CG_Event_Flags : 0x00040000
 kCGEventFlagMaskAlternate: CG_Event_Flags : 0x00080000
 
 kVK_Escape: CG_Key_Code : 0x35
+kVK_Return: CG_Key_Code : 0x24
 
 // Numbers
 kVK_ANSI_0: CG_Key_Code : 0x1D
@@ -91,13 +92,13 @@ kVK_ANSI_Y: CG_Key_Code : 0x10
 kVK_ANSI_Z: CG_Key_Code : 0x06
 
 // Symbols
-kVK_ANSI_Comma:        CG_Key_Code : 0x2B  // ,
-kVK_ANSI_Period:       CG_Key_Code : 0x2F  // .
-kVK_ANSI_Slash:        CG_Key_Code : 0x2C  // /
-kVK_ANSI_Semicolon:    CG_Key_Code : 0x29  // ; :
-kVK_ANSI_Quote:        CG_Key_Code : 0x27  // ' "
-kVK_ANSI_Minus:        CG_Key_Code : 0x1B  // - _
-kVK_ANSI_Equal:        CG_Key_Code : 0x18  // = +
+kVK_ANSI_Comma: CG_Key_Code : 0x2B // ,
+kVK_ANSI_Period: CG_Key_Code : 0x2F // .
+kVK_ANSI_Slash: CG_Key_Code : 0x2C // /
+kVK_ANSI_Semicolon: CG_Key_Code : 0x29 // ; :
+kVK_ANSI_Quote: CG_Key_Code : 0x27 // ' "
+kVK_ANSI_Minus: CG_Key_Code : 0x1B // - _
+kVK_ANSI_Equal: CG_Key_Code : 0x18 // = +
 
 cg_event_mask_bit :: #force_inline proc(t: CG_Event_Type) -> CG_Event_Mask {
 	return CG_Event_Mask(1) << t
@@ -132,7 +133,7 @@ foreign platform {
 	platform_launch_app :: proc "c" (bundle_id: cstring) -> i32 ---
 	platform_screen_rect :: proc "c" () -> CG_Rect ---
 	platform_fill_window :: proc "c" (pid: i32, rect: CG_Rect) ---
-	platform_show_overlay       :: proc "c" (keys: [^]cstring, names: [^]cstring, count: i32, active: i32) ---
+	platform_show_overlay :: proc "c" (keys: [^]cstring, names: [^]cstring, count: i32, active: i32) ---
 	platform_set_overlay_active :: proc "c" (active: i32) ---
-	platform_hide_overlay       :: proc "c" () ---
+	platform_hide_overlay :: proc "c" () ---
 }

@@ -1,7 +1,6 @@
 package harp
 
 import "core:fmt"
-import "core:os"
 import "core:os/os2"
 import "core:strings"
 import "core:time"
@@ -13,44 +12,6 @@ Binding :: struct {
 DefaultBindings :: "com.mitchellh.ghostty\ncom.google.Chrome\ncom.spotify.client\ncom.hnc.discord\n"
 
 MAX_BINDINGS :: 36
-keys := [MAX_BINDINGS]CG_Key_Code {
-	kVK_ANSI_H,
-	kVK_ANSI_B,
-	kVK_ANSI_J,
-	kVK_ANSI_K,
-	kVK_ANSI_S,
-	kVK_ANSI_Q,
-	kVK_ANSI_A,
-	kVK_ANSI_C,
-	kVK_ANSI_D,
-	kVK_ANSI_E,
-	kVK_ANSI_F,
-	kVK_ANSI_G,
-	kVK_ANSI_I,
-	kVK_ANSI_L,
-	kVK_ANSI_M,
-	kVK_ANSI_N,
-	kVK_ANSI_O,
-	kVK_ANSI_P,
-	kVK_ANSI_R,
-	kVK_ANSI_T,
-	kVK_ANSI_U,
-	kVK_ANSI_V,
-	kVK_ANSI_W,
-	kVK_ANSI_X,
-	kVK_ANSI_Y,
-	kVK_ANSI_Z,
-	kVK_ANSI_0,
-	kVK_ANSI_1,
-	kVK_ANSI_2,
-	kVK_ANSI_3,
-	kVK_ANSI_4,
-	kVK_ANSI_5,
-	kVK_ANSI_6,
-	kVK_ANSI_7,
-	kVK_ANSI_8,
-	kVK_ANSI_9,
-}
 bindings: [dynamic]Binding
 g_tap: CF_Mach_Port_Ref
 
@@ -60,7 +21,6 @@ Overlay :: struct {
 	keys:   [MAX_BINDINGS]cstring,
 	names:  [MAX_BINDINGS]cstring,
 }
-
 overlay: Overlay
 
 
@@ -76,7 +36,6 @@ main :: proc() {
 	if len(bindings) == 0 {use_default_bindings(&bindings)}
 	build_overlay_data()
 
-	// Prompt once, then poll silently until granted.
 	if platform_request_accessibility() == 0 {
 		fmt.println("[harp] waiting for accessibility permission...")
 		fmt.println("       System Settings → Privacy & Security → Accessibility")
@@ -84,7 +43,6 @@ main :: proc() {
 			time.sleep(2 * time.Second)
 		}
 	}
-
 	g_tap = CGEventTapCreate(
 		kCGSessionEventTap,
 		kCGHeadInsertEventTap,
@@ -103,59 +61,6 @@ main :: proc() {
 
 	fmt.println("[harp] running.")
 	CFRunLoopRun()
-}
-
-read_bindings :: proc() {
-	home := os.get_env("HOME")
-	defer delete(home)
-	if home == "" {
-		fmt.println("[harp] HOME not set")
-		return
-	}
-	dir := strings.join({home, "/.config/harp"}, "")
-	path := strings.join({dir, "/bindings"}, "")
-	defer delete(dir)
-	defer delete(path)
-
-	if !os.exists(dir) {
-		err := os.make_directory(dir)
-		if err != nil {panic("failed to make harp directory")}
-	}
-	if !os.exists(path) {
-		ok := os.write_entire_file(path, transmute([]byte)string(DefaultBindings))
-		if !ok {panic("failed to create bindings file")}
-		fmt.println("[harp] created default config at", path)
-	}
-	data, ok := os.read_entire_file(path)
-	if !ok {
-		fmt.println("[harp] no config found at", path)
-		return
-	}
-	disable_stage_manager()
-
-	defer delete(data)
-	for b in bindings {
-		delete(string(b.bundle_id))
-	}
-	clear(&bindings)
-
-	str := string(data)
-	i := 0
-	skipped := 0
-
-	for line in strings.split_lines_iterator(&str) {
-		trimmed := strings.trim_space(line)
-		if len(trimmed) == 0 {continue}
-		if i >= MAX_BINDINGS {
-			skipped += 1
-			continue
-		}
-		append(&bindings, Binding{key = keys[i], bundle_id = strings.clone_to_cstring(trimmed)})
-		i += 1
-	}
-	if skipped > 0 {
-		fmt.printf("[harp] warning: %d binding(s) ignored (max %d)\n", skipped, MAX_BINDINGS)
-	}
 }
 
 switch_to :: proc(bundle_id: cstring) {
@@ -184,13 +89,16 @@ on_key :: proc "c" (
 		if g_tap != nil do CGEventTapEnable(g_tap, true)
 		return event
 	}
-
 	keycode := CG_Key_Code(CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode))
 
-	// Overlay mode — intercept all keys, no passthrough.
 	if overlay.open {
 		n := i32(len(bindings))
 		switch keycode {
+		case kVK_Return:
+			overlay.open = false
+			platform_hide_overlay()
+			switch_to(bindings[overlay.active].bundle_id)
+
 		case kVK_Escape:
 			overlay.open = false
 			platform_hide_overlay()
@@ -203,15 +111,8 @@ on_key :: proc "c" (
 		}
 		return nil
 	}
-
 	flags := CGEventGetFlags(event)
-	cmd_only :=
-		(flags & kCGEventFlagMaskCommand) != 0 &&
-		(flags & kCGEventFlagMaskShift) == 0 &&
-		(flags & kCGEventFlagMaskControl) == 0 &&
-		(flags & kCGEventFlagMaskAlternate) == 0
-
-	if !cmd_only do return event
+	if !is_leader_key(flags) {return event}
 
 	if keycode == kVK_ANSI_Semicolon {
 		overlay.open = true
@@ -219,7 +120,6 @@ on_key :: proc "c" (
 		platform_show_overlay(&overlay.keys[0], &overlay.names[0], i32(len(bindings)), 0)
 		return nil
 	}
-
 	for b in bindings {
 		if keycode == b.key {
 			switch_to(b.bundle_id)
@@ -229,48 +129,18 @@ on_key :: proc "c" (
 	return event
 }
 
-key_labels := [MAX_BINDINGS]cstring {
-	"H",
-	"B",
-	"J",
-	"K",
-	"S",
-	"Q",
-	"A",
-	"C",
-	"D",
-	"E",
-	"F",
-	"G",
-	"I",
-	"L",
-	"M",
-	"N",
-	"O",
-	"P",
-	"R",
-	"T",
-	"U",
-	"V",
-	"W",
-	"X",
-	"Y",
-	"Z",
-	"0",
-	"1",
-	"2",
-	"3",
-	"4",
-	"5",
-	"6",
-	"7",
-	"8",
-	"9",
+is_leader_key :: proc(flags: CG_Event_Flags) -> bool {
+	return(
+		(flags & kCGEventFlagMaskCommand) != 0 &&
+		(flags & kCGEventFlagMaskShift) == 0 &&
+		(flags & kCGEventFlagMaskControl) == 0 &&
+		(flags & kCGEventFlagMaskAlternate) == 0 \
+	)
 }
 
 build_overlay_data :: proc() {
 	for i in 0 ..< len(bindings) {
-		overlay.keys[i] = key_labels[i]
+		overlay.keys[i] = LABELS[i]
 		overlay.names[i] = bindings[i].bundle_id
 	}
 }
