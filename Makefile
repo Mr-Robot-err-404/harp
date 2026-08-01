@@ -6,7 +6,7 @@ $(BIN): $(SHIM) main.odin
 	odin build . -out:$(BIN) -extra-linker-flags:"$(FRAMEWORKS)"
 
 $(SHIM): platform/macos.m platform/api.h
-	clang -c -fobjc-arc platform/macos.m -o $(SHIM)
+	clang -c -fobjc-arc -w platform/macos.m -o $(SHIM)
 
 clean:
 	rm -f $(BIN) $(SHIM)
