@@ -89,7 +89,17 @@ static AXUIElementRef find_window(AXUIElementRef ax_app) {
 // Overlay
 // ---------------------------------------------------------------------------
 
-static NSPanel *g_overlay = nil;
+// Kanagawa palette
+#define KG_BG    [NSColor colorWithRed:0x1a/255.0 green:0x1b/255.0 blue:0x26/255.0 alpha:1.0]
+#define KG_HL    [NSColor colorWithRed:0x2d/255.0 green:0x4f/255.0 blue:0x67/255.0 alpha:1.0]
+#define KG_FG    [NSColor colorWithRed:0xc0/255.0 green:0xca/255.0 blue:0xf5/255.0 alpha:1.0]
+#define KG_DIM   [NSColor colorWithRed:0x56/255.0 green:0x5f/255.0 blue:0x89/255.0 alpha:1.0]
+#define KG_ACT   [NSColor colorWithRed:0x7d/255.0 green:0xcf/255.0 blue:0xff/255.0 alpha:1.0]
+
+static NSPanel  *g_overlay      = nil;
+static NSArray  *g_overlay_keys = nil;
+static NSArray  *g_overlay_names= nil;
+static int       g_active       = 0;
 
 @interface HarpOverlayView : NSView
 @end
@@ -97,16 +107,60 @@ static NSPanel *g_overlay = nil;
 @implementation HarpOverlayView
 
 - (void)drawRect:(NSRect)dirtyRect {
-  // Background — Tokyo Night/Kanagawa dark
-  [[NSColor colorWithRed:0x1a/255.0 green:0x1b/255.0 blue:0x26/255.0 alpha:1.0] setFill];
+  CGFloat w = self.bounds.size.width;
+  CGFloat h = self.bounds.size.height;
+
+  // Background
+  [KG_BG setFill];
   NSRectFill(self.bounds);
 
-  // Left + right accent borders — Kanagawa cyan
-  NSColor *border = [NSColor colorWithRed:0x2D/255.0 green:0x4F/255.0 blue:0x67/255.0 alpha:1.0];
-  [border setFill];
-  CGFloat t = 2.0;
-  NSRectFill(NSMakeRect(0, 0, t, self.bounds.size.height));
-  NSRectFill(NSMakeRect(self.bounds.size.width - t, 0, t, self.bounds.size.height));
+  // Left + right borders
+  [KG_HL setFill];
+  NSRectFill(NSMakeRect(0, 0, 2, h));
+  NSRectFill(NSMakeRect(w - 2, 0, 2, h));
+
+  if (!g_overlay_keys.count) return;
+
+  CGFloat row_h = 36;
+  CGFloat pad_x = 20;
+  CGFloat pad_y = 14;
+  NSUInteger count = g_overlay_keys.count;
+
+  NSDictionary *key_base = @{
+    NSFontAttributeName: [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightBold],
+    NSForegroundColorAttributeName: KG_FG,
+  };
+  NSDictionary *key_active = @{
+    NSFontAttributeName: [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightBold],
+    NSForegroundColorAttributeName: KG_ACT,
+  };
+  NSDictionary *arrow_attrs = @{
+    NSFontAttributeName: [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightRegular],
+    NSForegroundColorAttributeName: KG_DIM,
+  };
+  NSDictionary *name_base = @{
+    NSFontAttributeName: [NSFont systemFontOfSize:13 weight:NSFontWeightRegular],
+    NSForegroundColorAttributeName: KG_FG,
+  };
+  NSDictionary *name_active = @{
+    NSFontAttributeName: [NSFont systemFontOfSize:13 weight:NSFontWeightRegular],
+    NSForegroundColorAttributeName: KG_ACT,
+  };
+
+  for (NSUInteger i = 0; i < count; i++) {
+    CGFloat y = h - pad_y - (i + 1) * row_h + 8;
+    BOOL active = ((int)i == g_active);
+
+    // Highlight bar for active row
+    if (active) {
+      [KG_HL setFill];
+      NSRectFill(NSMakeRect(2, y - 6, w - 4, row_h - 4));
+    }
+
+    [g_overlay_keys[i]  drawAtPoint:NSMakePoint(pad_x,      y) withAttributes:active ? key_active  : key_base];
+    [@"→"               drawAtPoint:NSMakePoint(pad_x + 36, y) withAttributes:arrow_attrs];
+    [g_overlay_names[i] drawAtPoint:NSMakePoint(pad_x + 60, y) withAttributes:active ? name_active : name_base];
+  }
 }
 
 - (BOOL)acceptsFirstResponder { return YES; }
@@ -119,12 +173,19 @@ static NSPanel *g_overlay = nil;
 
 @end
 
-void platform_show_overlay(void) {
+void platform_show_overlay(const char **keys, const char **names, int count, int active) {
+  // Copy strings before dispatch — caller's stack may be gone by the time block runs.
+  NSMutableArray *ks = [NSMutableArray arrayWithCapacity:count];
+  NSMutableArray *ns = [NSMutableArray arrayWithCapacity:count];
+  for (int i = 0; i < count; i++) {
+    [ks addObject:[NSString stringWithUTF8String:keys[i]]];
+    [ns addObject:[NSString stringWithUTF8String:names[i]]];
+  }
+
   dispatch_async(dispatch_get_main_queue(), ^{
-    if (g_overlay && g_overlay.isVisible) {
-      [g_overlay orderOut:nil];
-      return;
-    }
+    g_overlay_keys  = ks;
+    g_overlay_names = ns;
+    g_active        = active;
 
     NSRect screen = [NSScreen mainScreen].visibleFrame;
     CGFloat w = 480, h = 320;
@@ -137,7 +198,7 @@ void platform_show_overlay(void) {
                       backing:NSBackingStoreBuffered
                         defer:NO];
       g_overlay.level             = NSFloatingWindowLevel;
-      g_overlay.backgroundColor   = [NSColor colorWithRed:0x1a/255.0 green:0x1b/255.0 blue:0x26/255.0 alpha:1.0];
+      g_overlay.backgroundColor   = KG_BG;
       g_overlay.opaque             = YES;
       g_overlay.hasShadow          = NO;
       g_overlay.releasedWhenClosed = NO;
@@ -146,8 +207,16 @@ void platform_show_overlay(void) {
       g_overlay.contentView = view;
     }
 
+    [g_overlay.contentView setNeedsDisplay:YES];
     [g_overlay orderFrontRegardless];
     [g_overlay makeFirstResponder:g_overlay.contentView];
+  });
+}
+
+void platform_set_overlay_active(int active) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    g_active = active;
+    [g_overlay.contentView setNeedsDisplay:YES];
   });
 }
 

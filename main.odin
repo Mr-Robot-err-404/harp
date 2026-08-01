@@ -186,7 +186,9 @@ on_key :: proc "c" (
 	if !cmd_only do return event
 
 	if keycode == kVK_ANSI_Semicolon {
-		platform_show_overlay()
+		ks := [4]cstring{"H", "B", "S", "Q"}
+		ns := [4]cstring{"Ghostty", "Chrome", "Spotify", "Discord"}
+		platform_show_overlay(&ks[0], &ns[0], 4, 0)
 		return nil
 	}
 
