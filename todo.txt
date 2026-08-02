@@ -8,7 +8,8 @@
 [✔] Append open app to the list
 [✔] Search for apps
 
-[·] Bindings still work in overlay
+[·] Sexy UI
+[·] Windowing for lists
 [·] Duplicate apps
 [·] App history
 [·] Config file

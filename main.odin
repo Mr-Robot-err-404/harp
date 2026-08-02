@@ -194,14 +194,31 @@ on_key :: proc "c" (
 		}
 		return nil
 	case .Search:
+		flags := CGEventGetFlags(event)
 		switch keycode {
+		case kVK_DownArrow, kVK_ANSI_N:
+			if flags & kCGEventFlagMaskControl != 0 || keycode == kVK_DownArrow {
+				s.search.active = (s.search.active + 1) % i32(len(s.search.results))
+				refresh_search(s)
+				return nil
+			}
+		case kVK_UpArrow, kVK_ANSI_P:
+			if flags & kCGEventFlagMaskControl != 0 || keycode == kVK_UpArrow {
+				n := i32(len(s.search.results))
+				s.search.active = (s.search.active - 1 + n) % n
+				refresh_search(s)
+				return nil
+			}
 		case kVK_Return:
 			s.modal = .None
 			platform_hide_search()
 			switch_to(s.search.results[s.search.active].bundle_id)
 			clear_search_state(s)
 			return nil
+		}
+		s.search.active = 0
 
+		switch keycode {
 		case kVK_Escape:
 			s.modal = .None
 			platform_hide_search()
@@ -352,7 +369,7 @@ refresh_search :: proc(s: ^State) {
 		strings.to_cstring(&s.search.query),
 		raw_data(names),
 		i32(len(s.search.results)),
-		0,
+		s.search.active,
 	)
 }
 

@@ -52,6 +52,8 @@ kVK_Escape: CG_Key_Code : 0x35
 kVK_Return: CG_Key_Code : 0x24
 kVK_Space: CG_Key_Code : 0x31
 kVK_Delete: CG_Key_Code : 0x33
+kVK_UpArrow: CG_Key_Code : 0x7E
+kVK_DownArrow: CG_Key_Code : 0x7D
 
 // Numbers
 kVK_ANSI_0: CG_Key_Code : 0x1D
