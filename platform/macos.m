@@ -251,7 +251,14 @@ static NSTimer  *g_cursor_timer   = nil;
     }
 
     // Results
-    if (!g_search_results.count) return;
+    NSDictionary *empty_attrs = @{
+      NSFontAttributeName: [NSFont systemFontOfSize:13 weight:NSFontWeightRegular],
+      NSForegroundColorAttributeName: KG_DIM,
+    };
+    if (!g_search_results.count) {
+      [@"No results" drawAtPoint:NSMakePoint(pad_x, bar_y - row_h + 8) withAttributes:empty_attrs];
+      return;
+    }
     NSUInteger count = g_search_results.count;
     for (NSUInteger i = 0; i < count; i++) {
       CGFloat y = bar_y - (i + 1) * row_h + 8;
@@ -272,7 +279,41 @@ static NSTimer  *g_cursor_timer   = nil;
   }
 
   // List mode
-  if (!g_overlay_keys.count) return;
+  if (!g_overlay_keys.count) {
+    NSDictionary *title_attrs = @{
+      NSFontAttributeName: [NSFont systemFontOfSize:15 weight:NSFontWeightBold],
+      NSForegroundColorAttributeName: KG_FG,
+    };
+    NSDictionary *key_attrs = @{
+      NSFontAttributeName: [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightBold],
+      NSForegroundColorAttributeName: KG_ACT,
+    };
+    NSDictionary *desc_attrs = @{
+      NSFontAttributeName: [NSFont systemFontOfSize:13 weight:NSFontWeightRegular],
+      NSForegroundColorAttributeName: KG_DIM,
+    };
+
+    NSString *title = @"No active bindings";
+    NSString *k1 = @"Cmd+,";
+    NSString *d1 = @"search apps";
+    NSString *k2 = @"Cmd+Y";
+    NSString *d2 = @"add current app to bindings";
+
+    CGFloat kw = MAX([k1 sizeWithAttributes:key_attrs].width, [k2 sizeWithAttributes:key_attrs].width);
+
+    CGFloat ty = h / 2 + 52;
+    [title drawAtPoint:NSMakePoint(pad_x, ty) withAttributes:title_attrs];
+
+    CGFloat cy = ty - 40;
+    [k1 drawAtPoint:NSMakePoint(pad_x, cy) withAttributes:key_attrs];
+    [d1 drawAtPoint:NSMakePoint(pad_x + kw + 10, cy) withAttributes:desc_attrs];
+
+    cy -= 28;
+    [k2 drawAtPoint:NSMakePoint(pad_x, cy) withAttributes:key_attrs];
+    [d2 drawAtPoint:NSMakePoint(pad_x + kw + 10, cy) withAttributes:desc_attrs];
+
+    return;
+  }
   NSUInteger count = g_overlay_keys.count;
 
   for (NSUInteger i = 0; i < count; i++) {
