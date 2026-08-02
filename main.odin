@@ -26,6 +26,7 @@ Overlay :: struct {
 	keys:   [MAX_BINDINGS]cstring,
 	names:  [MAX_BINDINGS]cstring,
 	states: [MAX_BINDINGS]i32,
+	prev:   CG_Key_Code,
 }
 overlay: Overlay
 
@@ -95,6 +96,9 @@ on_key :: proc "c" (
 		return event
 	}
 	keycode := CG_Key_Code(CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode))
+	defer overlay.prev = keycode
+
+	if keycode != kVK_ANSI_X {clear_deleting_items()}
 
 	if overlay.open {
 		n := i32(len(bindings))
@@ -103,6 +107,23 @@ on_key :: proc "c" (
 			overlay.open = false
 			platform_hide_overlay()
 			switch_to(bindings[overlay.active].bundle_id)
+
+		case kVK_ANSI_X:
+			defer refresh_overlay()
+
+			if Item_State(overlay.states[overlay.active]) != .Deleting {
+				clear_overlay_state()
+				set_item_state(.Deleting, overlay.active)
+				break
+			}
+			switch overlay.prev {
+			case kVK_ANSI_X:
+				ordered_remove(&bindings, overlay.active)
+				clear_overlay_state()
+				rekey_bindings()
+			case:
+				set_item_state(.Deleting, overlay.active)
+			}
 
 		case kVK_Space:
 			overlay_state := derive_overlay_state()
@@ -127,6 +148,10 @@ on_key :: proc "c" (
 			log_overlay_state()
 
 		case kVK_Escape:
+			if overlay.prev == kVK_ANSI_X && derive_overlay_state() != Item_State.None {
+				refresh_overlay()
+				break
+			}
 			overlay.open = false
 			platform_hide_overlay()
 		case kVK_ANSI_J:
@@ -188,6 +213,12 @@ clear_overlay_state :: proc() {
 		set_item_state(.None, i32(i))
 	}
 }
+clear_deleting_items :: proc() {
+	for i in 0 ..< len(overlay.states) {
+		if Item_State(overlay.states[i]) != .Deleting {continue}
+		set_item_state(.None, i32(i))
+	}
+}
 
 derive_overlay_state :: proc() -> Item_State {
 	for n in overlay.states {
@@ -200,6 +231,12 @@ derive_overlay_state :: proc() -> Item_State {
 		}
 	}
 	return .None
+}
+
+rekey_bindings :: proc() {
+	for i in 0 ..< len(bindings) {
+		bindings[i].key = keys[i]
+	}
 }
 
 sync_overlay :: proc() {

@@ -147,10 +147,7 @@ static int       g_active       = 0;
     NSFontAttributeName: [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightBold],
     NSForegroundColorAttributeName: KG_ACT,
   };
-  NSDictionary *arrow_attrs = @{
-    NSFontAttributeName: [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightRegular],
-    NSForegroundColorAttributeName: KG_DIM,
-  };
+
   NSDictionary *name_base = @{
     NSFontAttributeName: [NSFont systemFontOfSize:13 weight:NSFontWeightRegular],
     NSForegroundColorAttributeName: KG_FG,
@@ -178,6 +175,25 @@ static int       g_active       = 0;
       NSRectFill(NSMakeRect(2, y - 6, w - 4, row_h - 4));
     }
 
+    // Deleting row: red background + confirmation text
+    if (state == ITEM_STATE_DELETING) {
+      [[NSColor colorWithRed:0.6 green:0.1 blue:0.1 alpha:1.0] setFill];
+      NSRectFill(NSMakeRect(2, y - 6, w - 4, row_h - 4));
+
+      NSDictionary *del_attrs = @{
+        NSFontAttributeName: [NSFont systemFontOfSize:13 weight:NSFontWeightRegular],
+        NSForegroundColorAttributeName: NSColor.whiteColor,
+      };
+      [@"Press X again to confirm" drawAtPoint:NSMakePoint(pad_x + 60, y) withAttributes:del_attrs];
+
+      NSDictionary *row_attrs_key = @{
+        NSFontAttributeName: [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightBold],
+        NSForegroundColorAttributeName: NSColor.whiteColor,
+      };
+      [g_overlay_keys[i] drawAtPoint:NSMakePoint(pad_x, y) withAttributes:row_attrs_key];
+      continue;
+    }
+
     NSDictionary *row_attrs_key = @{
       NSFontAttributeName: [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightBold],
       NSForegroundColorAttributeName: item_color,
@@ -188,7 +204,6 @@ static int       g_active       = 0;
     };
 
     [g_overlay_keys[i]  drawAtPoint:NSMakePoint(pad_x,      y) withAttributes:row_attrs_key];
-    [@"→"               drawAtPoint:NSMakePoint(pad_x + 36, y) withAttributes:arrow_attrs];
     [g_overlay_names[i] drawAtPoint:NSMakePoint(pad_x + 60, y) withAttributes:row_attrs_name];
   }
 }

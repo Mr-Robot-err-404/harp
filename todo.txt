@@ -2,5 +2,9 @@
 [✔] Keybindings for most keys
 [✔] Popup UI
 [✔] List of active bindings
-[·] Move / delete from list
+[✔] Move items in list
+[✔] Delete from list
+[·] Search for apps
+[·] Duplicate apps
+[·] App history
 [·] Config file
