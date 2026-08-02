@@ -201,32 +201,32 @@ static NSTimer  *g_cursor_timer   = nil;
   NSRectFill(NSMakeRect(0, 0, 2, h));
   NSRectFill(NSMakeRect(w - 2, 0, 2, h));
 
-  CGFloat row_h = 36;
+  CGFloat row_h = 42;
   CGFloat pad_x = 20;
   CGFloat pad_y = 14;
 
   if (g_mode == HARP_MODE_SEARCH) {
     // Search bar — full width, flush to top
-    CGFloat bar_h = 40;
+    CGFloat bar_h = 46;
     CGFloat bar_y = h - bar_h;
     [KG_BG setFill];
     NSRectFill(NSMakeRect(0, bar_y, w, bar_h));
 
     NSString *display = g_search_query.length > 0 ? g_search_query : @"";
     NSDictionary *query_attrs = @{
-      NSFontAttributeName: [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightRegular],
+      NSFontAttributeName: [NSFont monospacedSystemFontOfSize:15 weight:NSFontWeightRegular],
       NSForegroundColorAttributeName: KG_FG,
     };
-    [display drawAtPoint:NSMakePoint(pad_x, bar_y + 12) withAttributes:query_attrs];
+    [display drawAtPoint:NSMakePoint(pad_x, bar_y + 14) withAttributes:query_attrs];
 
     // Blinking cursor
     if (g_cursor_visible) {
       NSSize text_size = [display sizeWithAttributes:query_attrs];
       NSDictionary *cursor_attrs = @{
-        NSFontAttributeName: [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightRegular],
+        NSFontAttributeName: [NSFont monospacedSystemFontOfSize:15 weight:NSFontWeightRegular],
         NSForegroundColorAttributeName: KG_ACT,
       };
-      [@"|" drawAtPoint:NSMakePoint(pad_x + text_size.width, bar_y + 12) withAttributes:cursor_attrs];
+      [@"|" drawAtPoint:NSMakePoint(pad_x + text_size.width, bar_y + 14) withAttributes:cursor_attrs];
     }
 
     // Results
@@ -242,7 +242,7 @@ static NSTimer  *g_cursor_timer   = nil;
       }
 
       NSDictionary *name_attrs = @{
-        NSFontAttributeName: [NSFont systemFontOfSize:13 weight:NSFontWeightRegular],
+        NSFontAttributeName: [NSFont systemFontOfSize:15 weight:NSFontWeightRegular],
         NSForegroundColorAttributeName: cursor ? KG_ACT : KG_FG,
       };
       [g_search_results[i] drawAtPoint:NSMakePoint(pad_x, y) withAttributes:name_attrs];
@@ -276,13 +276,13 @@ static NSTimer  *g_cursor_timer   = nil;
       NSRectFill(NSMakeRect(2, y - 6, w - 4, row_h - 4));
 
       NSDictionary *del_attrs = @{
-        NSFontAttributeName: [NSFont systemFontOfSize:13 weight:NSFontWeightRegular],
+        NSFontAttributeName: [NSFont systemFontOfSize:15 weight:NSFontWeightRegular],
         NSForegroundColorAttributeName: NSColor.whiteColor,
       };
       [@"Press X again to confirm" drawAtPoint:NSMakePoint(pad_x + 60, y) withAttributes:del_attrs];
 
       NSDictionary *row_attrs_key = @{
-        NSFontAttributeName: [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightBold],
+        NSFontAttributeName: [NSFont monospacedSystemFontOfSize:15 weight:NSFontWeightBold],
         NSForegroundColorAttributeName: NSColor.whiteColor,
       };
       [g_overlay_keys[i] drawAtPoint:NSMakePoint(pad_x, y) withAttributes:row_attrs_key];
@@ -290,17 +290,39 @@ static NSTimer  *g_cursor_timer   = nil;
     }
 
     NSDictionary *row_attrs_key = @{
-      NSFontAttributeName: [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightBold],
+      NSFontAttributeName: [NSFont monospacedSystemFontOfSize:15 weight:NSFontWeightBold],
       NSForegroundColorAttributeName: item_color,
     };
     NSDictionary *row_attrs_name = @{
-      NSFontAttributeName: [NSFont systemFontOfSize:13 weight:NSFontWeightRegular],
+      NSFontAttributeName: [NSFont systemFontOfSize:15 weight:NSFontWeightRegular],
       NSForegroundColorAttributeName: item_color,
     };
 
     [g_overlay_keys[i]  drawAtPoint:NSMakePoint(pad_x,      y) withAttributes:row_attrs_key];
     [g_overlay_names[i] drawAtPoint:NSMakePoint(pad_x + 60, y) withAttributes:row_attrs_name];
   }
+
+  // Footer
+  NSDictionary *footer_key = @{
+    NSFontAttributeName: [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightBold],
+    NSForegroundColorAttributeName: KG_FG,
+  };
+  NSDictionary *footer_label = @{
+    NSFontAttributeName: [NSFont systemFontOfSize:13 weight:NSFontWeightRegular],
+    NSForegroundColorAttributeName: KG_DIM,
+  };
+
+  CGFloat fy = 8;
+  CGFloat fx = pad_x;
+
+  [@"x" drawAtPoint:NSMakePoint(fx, fy) withAttributes:footer_key];
+  fx += [@"x" sizeWithAttributes:footer_key].width + 4;
+  [@"delete" drawAtPoint:NSMakePoint(fx, fy) withAttributes:footer_label];
+  fx += [@"delete" sizeWithAttributes:footer_label].width + 16;
+
+  [@"space" drawAtPoint:NSMakePoint(fx, fy) withAttributes:footer_key];
+  fx += [@"space" sizeWithAttributes:footer_key].width + 4;
+  [@"swap" drawAtPoint:NSMakePoint(fx, fy) withAttributes:footer_label];
 }
 
 - (BOOL)acceptsFirstResponder { return YES; }
