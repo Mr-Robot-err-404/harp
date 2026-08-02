@@ -168,6 +168,9 @@ on_key :: proc "c" (
 	if !is_leader_key(flags) {return event}
 
 	switch keycode {
+	case kVK_ANSI_Slash:
+		results := []cstring{"Ghostty", "Ghost Browser"}
+		platform_show_search("ghost", raw_data(results[:]), 2, 0)
 	case kVK_ANSI_Y:
 		app := platform_frontmost_app()
 		for b in bindings {

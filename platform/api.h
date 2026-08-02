@@ -12,3 +12,5 @@ const char *platform_frontmost_app(void);
 const char *platform_app_name(const char *bundle_id);
 void   platform_show_overlay(const char **keys, const char **names, const int *states, int count, int active);
 void   platform_hide_overlay(void);
+void   platform_show_search(const char *query, const char **results, int count, int active);
+void   platform_hide_search(void);

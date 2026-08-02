@@ -129,11 +129,19 @@ const char *platform_app_name(const char *bundle_id) {
 #define ITEM_STATE_MOVING   1
 #define ITEM_STATE_DELETING 2
 
-static NSPanel  *g_overlay      = nil;
-static NSArray  *g_overlay_keys = nil;
-static NSArray  *g_overlay_names= nil;
+// Overlay modes
+#define HARP_MODE_LIST   0
+#define HARP_MODE_SEARCH 1
+
+static NSPanel  *g_overlay        = nil;
+static NSArray  *g_overlay_keys   = nil;
+static NSArray  *g_overlay_names  = nil;
 static NSArray  *g_overlay_states = nil;
-static int       g_active       = 0;
+static int       g_active         = 0;
+static int       g_mode           = HARP_MODE_LIST;
+static NSString *g_search_query   = nil;
+static NSArray  *g_search_results = nil;
+static int       g_search_active  = 0;
 
 @interface HarpOverlayView : NSView
 @end
@@ -153,30 +161,56 @@ static int       g_active       = 0;
   NSRectFill(NSMakeRect(0, 0, 2, h));
   NSRectFill(NSMakeRect(w - 2, 0, 2, h));
 
-  if (!g_overlay_keys.count) return;
-
   CGFloat row_h = 36;
   CGFloat pad_x = 20;
   CGFloat pad_y = 14;
+
+  if (g_mode == HARP_MODE_SEARCH) {
+    // Search bar — full width, flush to top
+    CGFloat bar_h = 40;
+    CGFloat bar_y = h - bar_h;
+    [KG_BG setFill];
+    NSRectFill(NSMakeRect(0, bar_y, w, bar_h));
+
+    NSString *display = g_search_query.length > 0 ? g_search_query : @"";
+    NSDictionary *query_attrs = @{
+      NSFontAttributeName: [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightRegular],
+      NSForegroundColorAttributeName: KG_FG,
+    };
+    [display drawAtPoint:NSMakePoint(pad_x, bar_y + 12) withAttributes:query_attrs];
+
+    // Cursor line at end of query text
+    NSSize text_size = [display sizeWithAttributes:query_attrs];
+    NSDictionary *cursor_attrs = @{
+      NSFontAttributeName: [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightRegular],
+      NSForegroundColorAttributeName: KG_ACT,
+    };
+    [@"|" drawAtPoint:NSMakePoint(pad_x + text_size.width, bar_y + 12) withAttributes:cursor_attrs];
+
+    // Results
+    if (!g_search_results.count) return;
+    NSUInteger count = g_search_results.count;
+    for (NSUInteger i = 0; i < count; i++) {
+      CGFloat y = bar_y - (i + 1) * row_h + 8;
+      BOOL cursor = ((int)i == g_search_active);
+
+      if (cursor) {
+        [KG_HL setFill];
+        NSRectFill(NSMakeRect(2, y - 6, w - 4, row_h - 4));
+      }
+
+      NSDictionary *name_attrs = @{
+        NSFontAttributeName: [NSFont systemFontOfSize:13 weight:NSFontWeightRegular],
+        NSForegroundColorAttributeName: cursor ? KG_ACT : KG_FG,
+      };
+      [g_search_results[i] drawAtPoint:NSMakePoint(pad_x, y) withAttributes:name_attrs];
+    }
+    return;
+  }
+
+  // List mode
+  if (!g_overlay_keys.count) return;
   NSUInteger count = g_overlay_keys.count;
-
-  NSDictionary *key_base = @{
-    NSFontAttributeName: [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightBold],
-    NSForegroundColorAttributeName: KG_FG,
-  };
-  NSDictionary *key_active = @{
-    NSFontAttributeName: [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightBold],
-    NSForegroundColorAttributeName: KG_ACT,
-  };
-
-  NSDictionary *name_base = @{
-    NSFontAttributeName: [NSFont systemFontOfSize:13 weight:NSFontWeightRegular],
-    NSForegroundColorAttributeName: KG_FG,
-  };
-  NSDictionary *name_active = @{
-    NSFontAttributeName: [NSFont systemFontOfSize:13 weight:NSFontWeightRegular],
-    NSForegroundColorAttributeName: KG_ACT,
-  };
 
   for (NSUInteger i = 0; i < count; i++) {
     CGFloat y = h - pad_y - (i + 1) * row_h + 8;
@@ -190,13 +224,11 @@ static int       g_active       = 0;
       default:                  item_color = KG_FG;  break;
     }
 
-    // Highlight bar for cursor row
     if (cursor) {
       [KG_HL setFill];
       NSRectFill(NSMakeRect(2, y - 6, w - 4, row_h - 4));
     }
 
-    // Deleting row: red background + confirmation text
     if (state == ITEM_STATE_DELETING) {
       [[NSColor colorWithRed:0.6 green:0.1 blue:0.1 alpha:1.0] setFill];
       NSRectFill(NSMakeRect(2, y - 6, w - 4, row_h - 4));
@@ -283,8 +315,35 @@ void platform_show_overlay(const char **keys, const char **names, const int *sta
 }
 
 
+void platform_show_search(const char *query, const char **results, int count, int active) {
+  NSString *q = [NSString stringWithUTF8String:query];
+  NSMutableArray *rs = [NSMutableArray arrayWithCapacity:count];
+  for (int i = 0; i < count; i++)
+    [rs addObject:[NSString stringWithUTF8String:results[i]]];
+
+  dispatch_async(dispatch_get_main_queue(), ^{
+    g_search_query  = q;
+    g_search_results = rs;
+    g_search_active  = active;
+    g_mode           = HARP_MODE_SEARCH;
+    [g_overlay.contentView setNeedsDisplay:YES];
+    [g_overlay orderFrontRegardless];
+  });
+}
+
+void platform_hide_search(void) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    g_mode           = HARP_MODE_LIST;
+    g_search_query   = nil;
+    g_search_results = nil;
+    g_search_active  = 0;
+    [g_overlay.contentView setNeedsDisplay:YES];
+  });
+}
+
 void platform_hide_overlay(void) {
   dispatch_async(dispatch_get_main_queue(), ^{
+    g_mode = HARP_MODE_LIST;
     [g_overlay orderOut:nil];
   });
 }
