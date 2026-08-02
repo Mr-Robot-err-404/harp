@@ -7,9 +7,7 @@
 [✔] Extract app names from key
 [✔] Append open app to the list
 [✔] Search for apps
+[✔] Persist keybinds
 
-[·] Persist keybinds
 [·] Windowing for lists
 [·] Config file
-[·] Duplicate apps
-[·] App history

@@ -13,6 +13,7 @@ Binding :: struct {
 
 MAX_BINDINGS :: 36
 MAX_APPS :: 1024
+EMPTY_BINDING :: "<empty>"
 
 Item_State :: enum i32 {
 	None     = 0,
@@ -147,9 +148,9 @@ on_key :: proc "c" (
 			}
 			switch s.overlay.prev {
 			case kVK_ANSI_X:
-				ordered_remove(&s.bindings, s.overlay.active)
+				remove_item(s, s.overlay.active)
 				clear_overlay_state(s)
-				rekey_bindings(s)
+				write_bindings(s)
 			case:
 				set_item_state(s, .Deleting, s.overlay.active)
 			}
@@ -167,6 +168,7 @@ on_key :: proc "c" (
 				swap_bindings(s, s.overlay.active, idx)
 				clear_overlay_state(s)
 				sync_overlay(s)
+				write_bindings(s)
 
 			case .Moving:
 				set_item_state(s, .None, s.overlay.active)
@@ -174,7 +176,6 @@ on_key :: proc "c" (
 				set_item_state(s, .Moving, s.overlay.active)
 			}
 			refresh_overlay(s)
-			log_overlay_state(s)
 
 		case kVK_Escape:
 			if s.overlay.prev == kVK_ANSI_X && derive_overlay_state(s) != Item_State.None {
@@ -253,9 +254,17 @@ on_key :: proc "c" (
 			refresh_search(s)
 			return nil
 		case kVK_ANSI_Y:
+			defer write_bindings(s)
+
 			app := platform_frontmost_app()
 			for b in s.bindings {
 				if b.bundle_id == app {return nil}
+			}
+			for i in 0 ..< len(s.bindings) {
+				if s.bindings[i].bundle_id == EMPTY_BINDING {
+					s.bindings[i].bundle_id = strings.clone_to_cstring(string(app))
+					return nil
+				}
 			}
 			if len(s.bindings) >= MAX_BINDINGS {return nil}
 			idx := len(s.bindings)
@@ -273,6 +282,7 @@ on_key :: proc "c" (
 			return nil
 		}
 		for b in s.bindings {
+			if b.bundle_id == EMPTY_BINDING {continue}
 			if keycode == b.key {
 				switch_to(b.bundle_id)
 				return nil
@@ -288,6 +298,14 @@ fill_search_results :: proc(results: ^[dynamic]App) {
 	}
 }
 
+remove_item :: proc(s: ^State, idx: i32) {
+	if idx < 4 {
+		s.bindings[idx].bundle_id = EMPTY_BINDING
+		return
+	}
+	ordered_remove(&s.bindings, idx)
+	rekey_bindings(s)
+}
 
 is_leader_key :: proc(flags: CG_Event_Flags) -> bool {
 	return(
@@ -354,8 +372,16 @@ rekey_bindings :: proc(s: ^State) {
 sync_overlay :: proc(s: ^State) {
 	for i in 0 ..< len(s.bindings) {
 		s.overlay.keys[i] = LABELS[i]
-		s.overlay.names[i] = platform_app_name(s.bindings[i].bundle_id)
+		s.overlay.names[i] =
+			s.bindings[i].bundle_id == EMPTY_BINDING ? "no binding" : platform_app_name(s.bindings[i].bundle_id)
 	}
+}
+
+all_empty :: proc(s: ^State) -> bool {
+	for b in s.bindings {
+		if b.bundle_id != EMPTY_BINDING {return false}
+	}
+	return true
 }
 
 refresh_search :: proc(s: ^State) {
@@ -373,11 +399,12 @@ refresh_search :: proc(s: ^State) {
 
 refresh_overlay :: proc(s: ^State) {
 	sync_overlay(s)
+	count := all_empty(s) ? 0 : i32(len(s.bindings))
 	platform_show_overlay(
 		&s.overlay.keys[0],
 		&s.overlay.names[0],
 		&s.overlay.states[0],
-		i32(len(s.bindings)),
+		count,
 		s.overlay.active,
 	)
 }
@@ -419,5 +446,3 @@ disable_stage_manager :: proc() {
 		panic("failed to disable macos stage manager")
 	}
 }
-
-

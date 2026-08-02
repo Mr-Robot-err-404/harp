@@ -305,12 +305,12 @@ static NSTimer  *g_cursor_timer   = nil;
     [title drawAtPoint:NSMakePoint(pad_x, ty) withAttributes:title_attrs];
 
     CGFloat cy = ty - 40;
-    [k1 drawAtPoint:NSMakePoint(pad_x, cy) withAttributes:key_attrs];
-    [d1 drawAtPoint:NSMakePoint(pad_x + kw + 10, cy) withAttributes:desc_attrs];
-
-    cy -= 28;
     [k2 drawAtPoint:NSMakePoint(pad_x, cy) withAttributes:key_attrs];
     [d2 drawAtPoint:NSMakePoint(pad_x + kw + 10, cy) withAttributes:desc_attrs];
+
+    cy -= 28;
+    [k1 drawAtPoint:NSMakePoint(pad_x, cy) withAttributes:key_attrs];
+    [d1 drawAtPoint:NSMakePoint(pad_x + kw + 10, cy) withAttributes:desc_attrs];
 
     return;
   }
@@ -351,13 +351,14 @@ static NSTimer  *g_cursor_timer   = nil;
       continue;
     }
 
+    BOOL is_empty = [g_overlay_names[i] isEqualToString:@"no binding"];
     NSDictionary *row_attrs_key = @{
       NSFontAttributeName: [NSFont monospacedSystemFontOfSize:15 weight:NSFontWeightBold],
-      NSForegroundColorAttributeName: item_color,
+      NSForegroundColorAttributeName: is_empty ? KG_DIM : item_color,
     };
     NSDictionary *row_attrs_name = @{
       NSFontAttributeName: [NSFont systemFontOfSize:15 weight:NSFontWeightRegular],
-      NSForegroundColorAttributeName: item_color,
+      NSForegroundColorAttributeName: is_empty ? KG_DIM : item_color,
     };
 
     [g_overlay_keys[i]  drawAtPoint:NSMakePoint(pad_x,      y) withAttributes:row_attrs_key];

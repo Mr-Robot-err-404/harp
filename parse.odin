@@ -4,6 +4,23 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 
+write_bindings :: proc(s: ^State) {
+	home := os.get_env("HOME")
+	path := strings.join({home, "/.config/harp/bindings"}, "")
+	defer delete(home)
+	defer delete(path)
+
+	sb := strings.Builder{}
+	defer strings.builder_destroy(&sb)
+
+	for b in s.bindings {
+		if string(b.bundle_id) == EMPTY_BINDING {continue}
+		strings.write_string(&sb, string(b.bundle_id))
+		strings.write_byte(&sb, '\n')
+	}
+	os.write_entire_file(path, transmute([]byte)strings.to_string(sb))
+}
+
 read_bindings :: proc(s: ^State) {
 	home := os.get_env("HOME")
 	defer delete(home)
@@ -53,5 +70,8 @@ read_bindings :: proc(s: ^State) {
 	}
 	if skipped > 0 {
 		fmt.printf("[harp] warning: %d binding(s) ignored (max %d)\n", skipped, MAX_BINDINGS)
+	}
+	for len(s.bindings) < 4 {
+		append(&s.bindings, Binding{key = keys[len(s.bindings)], bundle_id = EMPTY_BINDING})
 	}
 }
