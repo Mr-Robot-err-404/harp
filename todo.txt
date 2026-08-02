@@ -6,9 +6,9 @@
 [✔] Delete from list
 [✔] Extract app names from key
 [✔] Append open app to the list
+[✔] Search for apps
 
 [·] Bindings still work in overlay
-[·] Search for apps
 [·] Duplicate apps
 [·] App history
 [·] Config file

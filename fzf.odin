@@ -6,29 +6,34 @@ import "core:strings"
 search_query :: proc(s: ^State, query: string) {
 	clear(&s.search.results)
 	if len(query) == 0 {
-		for name in app_names[:app_count] {
-			append(&s.search.results, name)
+		for i in 0 ..< app_count {
+			append(&s.search.results, App{name = app_names[i], bundle_id = app_bundle_ids[i]})
 		}
 		return
 	}
 	Score_Entry :: struct {
-		name:  cstring,
+		app:   App,
 		score: int,
 	}
 	scored := make([dynamic]Score_Entry, context.temp_allocator)
 
-	for name in app_names[:app_count] {
-		lower := strings.to_lower(string(name), context.temp_allocator)
+	for i in 0 ..< app_count {
+		lower := strings.to_lower(string(app_names[i]), context.temp_allocator)
 		score := score_match(lower, query)
-		if score > 0 {
-			append(&scored, Score_Entry{name, score})
-		}
+		if score <= 0 {continue}
+		append(
+			&scored,
+			Score_Entry {
+				app = App{name = app_names[i], bundle_id = app_bundle_ids[i]},
+				score = score,
+			},
+		)
 	}
 	slice.sort_by(scored[:], proc(a, b: Score_Entry) -> bool {
 		return a.score > b.score
 	})
 	for e in scored {
-		append(&s.search.results, e.name)
+		append(&s.search.results, e.app)
 	}
 }
 

@@ -32,9 +32,13 @@ Overlay :: struct {
 	states: [MAX_BINDINGS]i32,
 	prev:   CG_Key_Code,
 }
+App :: struct {
+	name:      cstring,
+	bundle_id: cstring,
+}
 Search :: struct {
 	query:   strings.Builder,
-	results: [dynamic]cstring,
+	results: [dynamic]App,
 	active:  i32,
 }
 State :: struct {
@@ -52,7 +56,7 @@ g_tap: CF_Mach_Port_Ref
 main :: proc() {
 	state := State {
 		bindings = make([dynamic]Binding),
-		search = Search{results = make([dynamic]cstring), query = strings.Builder{}},
+		search = Search{results = make([dynamic]App), query = strings.Builder{}},
 	}
 	fill_search_results(&state.search.results)
 	defer {
@@ -191,6 +195,13 @@ on_key :: proc "c" (
 		return nil
 	case .Search:
 		switch keycode {
+		case kVK_Return:
+			s.modal = .None
+			platform_hide_search()
+			switch_to(s.search.results[s.search.active].bundle_id)
+			clear_search_state(s)
+			return nil
+
 		case kVK_Escape:
 			s.modal = .None
 			platform_hide_search()
@@ -256,9 +267,9 @@ on_key :: proc "c" (
 	return event
 }
 
-fill_search_results :: proc(results: ^[dynamic]cstring) {
+fill_search_results :: proc(results: ^[dynamic]App) {
 	for i in 0 ..< app_count {
-		append(results, app_names[i])
+		append(results, App{name = app_names[i], bundle_id = app_bundle_ids[i]})
 	}
 }
 
@@ -294,6 +305,11 @@ clear_overlay_state :: proc(s: ^State) {
 		set_item_state(s, .None, i32(i))
 	}
 }
+clear_search_state :: proc(s: ^State) {
+	clear(&s.search.results)
+	fill_search_results(&s.search.results)
+	strings.builder_reset(&s.search.query)
+}
 clear_deleting_items :: proc(s: ^State) {
 	for i in 0 ..< len(s.overlay.states) {
 		if Item_State(s.overlay.states[i]) != .Deleting {continue}
@@ -328,9 +344,13 @@ sync_overlay :: proc(s: ^State) {
 }
 
 refresh_search :: proc(s: ^State) {
+	names := make([]cstring, len(s.search.results), context.temp_allocator)
+	for r, i in s.search.results {
+		names[i] = r.name
+	}
 	platform_show_search(
 		strings.to_cstring(&s.search.query),
-		raw_data(s.search.results[:]),
+		raw_data(names),
 		i32(len(s.search.results)),
 		0,
 	)
