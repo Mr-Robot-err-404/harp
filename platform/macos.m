@@ -116,19 +116,39 @@ const char *platform_app_name(const char *bundle_id) {
 // App list
 
 static NSArray<NSURL *> *all_app_urls(void) {
-  return [[NSFileManager defaultManager]
-      contentsOfDirectoryAtURL:[NSURL fileURLWithPath:@"/Applications"]
-      includingPropertiesForKeys:@[NSURLLocalizedNameKey]
-      options:NSDirectoryEnumerationSkipsHiddenFiles
-      error:nil];
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSArray<NSString *> *dirs = @[
+    @"/Applications",
+    @"/System/Applications",
+    [NSHomeDirectory() stringByAppendingPathComponent:@"Applications"],
+  ];
+
+  NSMutableArray<NSURL *> *result = [NSMutableArray array];
+  for (NSString *dir in dirs) {
+    NSArray<NSURL *> *urls = [fm
+        contentsOfDirectoryAtURL:[NSURL fileURLWithPath:dir]
+        includingPropertiesForKeys:@[NSURLLocalizedNameKey]
+        options:NSDirectoryEnumerationSkipsHiddenFiles
+        error:nil];
+    if (urls) [result addObjectsFromArray:urls];
+  }
+  return result;
 }
 
 int platform_get_app_count(void) {
-  return (int)all_app_urls().count;
+  // count unique bundle IDs
+  NSArray<NSURL *> *urls = all_app_urls();
+  NSMutableSet *seen = [NSMutableSet set];
+  for (NSURL *url in urls) {
+    NSBundle *bundle = [NSBundle bundleWithURL:url];
+    if (bundle.bundleIdentifier) [seen addObject:bundle.bundleIdentifier];
+  }
+  return (int)seen.count;
 }
 
 int platform_get_all_apps(const char **names_out, const char **bundle_ids_out, int max_count) {
   NSArray<NSURL *> *urls = all_app_urls();
+  NSMutableSet *seen = [NSMutableSet set];
   int count = 0;
   for (NSURL *url in urls) {
     if (count >= max_count) break;
@@ -136,7 +156,8 @@ int platform_get_all_apps(const char **names_out, const char **bundle_ids_out, i
     if (!bundle) continue;
 
     NSString *bundle_id = bundle.bundleIdentifier;
-    if (!bundle_id) continue;
+    if (!bundle_id || [seen containsObject:bundle_id]) continue;
+    [seen addObject:bundle_id];
 
     NSString *name = [bundle objectForInfoDictionaryKey:@"CFBundleDisplayName"]
                   ?: [bundle objectForInfoDictionaryKey:@"CFBundleName"];

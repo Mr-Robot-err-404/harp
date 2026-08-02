@@ -21,9 +21,8 @@ read_bindings :: proc(s: ^State) {
 		if err != nil {panic("failed to make harp directory")}
 	}
 	if !os.exists(path) {
-		ok := os.write_entire_file(path, transmute([]byte)string(DefaultBindings))
+		ok := os.write_entire_file(path, []byte{})
 		if !ok {panic("failed to create bindings file")}
-		fmt.println("[harp] created default config at", path)
 	}
 	data, ok := os.read_entire_file(path)
 	if !ok {

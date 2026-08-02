@@ -10,7 +10,6 @@ Binding :: struct {
 	key:       CG_Key_Code,
 	bundle_id: cstring,
 }
-DefaultBindings :: "com.mitchellh.ghostty\ncom.google.Chrome\ncom.spotify.client\ncom.hnc.discord\n"
 
 MAX_BINDINGS :: 36
 MAX_APPS :: 1024
@@ -68,7 +67,6 @@ main :: proc() {
 	if !is_setup() {setup()}
 
 	read_bindings(&state)
-	if len(state.bindings) == 0 {use_default_bindings(&state.bindings)}
 	build_overlay_data(&state)
 
 	if platform_request_accessibility() == 0 {
@@ -422,21 +420,4 @@ disable_stage_manager :: proc() {
 	}
 }
 
-use_default_bindings :: proc(bindings: ^[dynamic]Binding) {
-	append(
-		bindings,
-		Binding{key = kVK_ANSI_H, bundle_id = strings.clone_to_cstring("com.mitchellh.ghostty")},
-	)
-	append(
-		bindings,
-		Binding{key = kVK_ANSI_B, bundle_id = strings.clone_to_cstring("com.google.Chrome")},
-	)
-	append(
-		bindings,
-		Binding{key = kVK_ANSI_J, bundle_id = strings.clone_to_cstring("com.spotify.client")},
-	)
-	append(
-		bindings,
-		Binding{key = kVK_ANSI_K, bundle_id = strings.clone_to_cstring("com.hnc.discord")},
-	)
-}
+
