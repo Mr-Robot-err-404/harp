@@ -105,6 +105,8 @@ cg_event_mask_bit :: #force_inline proc(t: CG_Event_Type) -> CG_Event_Mask {
 	return CG_Event_Mask(1) << t
 }
 
+CF_Index :: int
+
 foreign import cg "system:CoreGraphics.framework"
 @(link_prefix = "")
 foreign cg {
@@ -112,6 +114,7 @@ foreign cg {
 	CGEventTapEnable :: proc "c" (tap: CF_Mach_Port_Ref, enable: bool) ---
 	CGEventGetFlags :: proc "c" (event: CG_Event_Ref) -> CG_Event_Flags ---
 	CGEventGetIntegerValueField :: proc "c" (event: CG_Event_Ref, field: CG_Event_Field) -> i64 ---
+	CGEventKeyboardGetUnicodeString :: proc "c" (event: CG_Event_Ref, max_len: CF_Index, actual_len: ^CF_Index, buf: [^]u16) ---
 }
 
 foreign import cf "system:CoreFoundation.framework"

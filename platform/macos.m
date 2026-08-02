@@ -332,6 +332,26 @@ void platform_show_search(const char *query, const char **results, int count, in
     g_mode           = HARP_MODE_SEARCH;
     g_cursor_visible = YES;
 
+    NSRect screen = [NSScreen mainScreen].visibleFrame;
+    CGFloat w = 480, h = 320;
+    NSRect frame = NSMakeRect(NSMidX(screen) - w / 2, NSMidY(screen) - h / 2, w, h);
+
+    if (!g_overlay) {
+      g_overlay = [[NSPanel alloc]
+          initWithContentRect:frame
+                    styleMask:NSWindowStyleMaskNonactivatingPanel | NSWindowStyleMaskBorderless
+                      backing:NSBackingStoreBuffered
+                        defer:NO];
+      g_overlay.level             = NSFloatingWindowLevel;
+      g_overlay.backgroundColor   = KG_BG;
+      g_overlay.opaque             = YES;
+      g_overlay.hasShadow          = NO;
+      g_overlay.releasedWhenClosed = NO;
+
+      HarpOverlayView *view = [[HarpOverlayView alloc] initWithFrame:NSMakeRect(0, 0, w, h)];
+      g_overlay.contentView = view;
+    }
+
     if (!g_cursor_timer) {
       g_cursor_timer = [NSTimer scheduledTimerWithTimeInterval:0.5
                                                        repeats:YES
@@ -343,6 +363,7 @@ void platform_show_search(const char *query, const char **results, int count, in
 
     [g_overlay.contentView setNeedsDisplay:YES];
     [g_overlay orderFrontRegardless];
+    [g_overlay makeFirstResponder:g_overlay.contentView];
   });
 }
 
@@ -355,7 +376,7 @@ void platform_hide_search(void) {
     g_search_query   = nil;
     g_search_results = nil;
     g_search_active  = 0;
-    [g_overlay.contentView setNeedsDisplay:YES];
+    [g_overlay orderOut:nil];
   });
 }
 

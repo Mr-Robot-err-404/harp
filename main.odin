@@ -32,7 +32,7 @@ Overlay :: struct {
 	prev:   CG_Key_Code,
 }
 Search :: struct {
-	query:   string,
+	query:   strings.Builder,
 	results: [dynamic]cstring,
 	active:  i32,
 }
@@ -48,14 +48,14 @@ g_tap: CF_Mach_Port_Ref
 main :: proc() {
 	state := State {
 		bindings = make([dynamic]Binding),
-		search = Search{results = make([dynamic]cstring)},
+		search = Search{results = make([dynamic]cstring), query = strings.Builder{}},
 	}
 	defer {
 		for b in state.bindings do delete(string(b.bundle_id))
 		delete(state.bindings)
 		delete(state.search.results)
+		strings.builder_destroy(&state.search.query)
 	}
-
 	if !is_setup() {setup()}
 
 	read_bindings(&state)
@@ -189,6 +189,12 @@ on_key :: proc "c" (
 		case kVK_Escape:
 			s.modal = .None
 			platform_hide_search()
+		case:
+			buf: [4]u16
+			len: CF_Index
+			CGEventKeyboardGetUnicodeString(event, 4, &len, &buf[0])
+			if len == 1 && buf[0] >= 32 && buf[0] < 127 {
+			}
 		}
 		return nil
 	case .None:
@@ -198,13 +204,13 @@ on_key :: proc "c" (
 		switch keycode {
 		case kVK_ANSI_Comma:
 			s.modal = .Search
-			append(&s.search.results, "Ghostty")
 			platform_show_search(
-				"ghost",
+				strings.to_cstring(&s.search.query),
 				raw_data(s.search.results[:]),
 				i32(len(s.search.results)),
 				0,
 			)
+			return nil
 		case kVK_ANSI_Y:
 			app := platform_frontmost_app()
 			for b in s.bindings {
