@@ -105,24 +105,36 @@ on_key :: proc "c" (
 			switch_to(bindings[overlay.active].bundle_id)
 
 		case kVK_Space:
-			state := Item_State(overlay.states[overlay.active])
-			switch state {
+			overlay_state := derive_overlay_state()
+
+			switch Item_State(overlay.states[overlay.active]) {
 			case .None:
-				overlay.states[overlay.active] = i32(Item_State.Moving)
-			case .Moving, .Deleting:
-				overlay.states[overlay.active] = i32(Item_State.None)
+				set_item_state(.Moving, overlay.active)
+				if overlay_state != .Moving {break}
+
+				idx, ok := find_target_idx(overlay.active, .Moving)
+				if !ok {panic("WTF")}
+				swap_bindings(overlay.active, idx)
+				clear_overlay_state()
+				sync_overlay()
+
+			case .Moving:
+				set_item_state(.None, overlay.active)
+			case .Deleting:
+				set_item_state(.Moving, overlay.active)
 			}
-			platform_redraw_overlay()
+			refresh_overlay()
+			log_overlay_state()
 
 		case kVK_Escape:
 			overlay.open = false
 			platform_hide_overlay()
 		case kVK_ANSI_J:
 			overlay.active = (overlay.active + 1) % n
-			platform_set_overlay_active(overlay.active)
+			refresh_overlay()
 		case kVK_ANSI_K:
 			overlay.active = (overlay.active - 1 + n) % n
-			platform_set_overlay_active(overlay.active)
+			refresh_overlay()
 		}
 		return nil
 	}
@@ -133,13 +145,7 @@ on_key :: proc "c" (
 		idx := active_binding_idx()
 		overlay.active = idx
 		overlay.open = true
-		platform_show_overlay(
-			&overlay.keys[0],
-			&overlay.names[0],
-			&overlay.states[0],
-			i32(len(bindings)),
-			idx,
-		)
+		refresh_overlay()
 		return nil
 	}
 	for b in bindings {
@@ -157,6 +163,60 @@ is_leader_key :: proc(flags: CG_Event_Flags) -> bool {
 		(flags & kCGEventFlagMaskShift) == 0 &&
 		(flags & kCGEventFlagMaskControl) == 0 &&
 		(flags & kCGEventFlagMaskAlternate) == 0 \
+	)
+}
+
+swap_bindings :: proc(a, b: i32) {
+	tmp := bindings[a].bundle_id
+	bindings[a].bundle_id = bindings[b].bundle_id
+	bindings[b].bundle_id = tmp
+}
+
+find_target_idx :: proc(current: i32, state: Item_State) -> (i32, bool) {
+	for i: i32; i < i32(len(bindings)); i += 1 {
+		if i == current {continue}
+		if state == Item_State(overlay.states[i]) {return i, true}
+	}
+	return -1, false
+}
+
+set_item_state :: proc(state: Item_State, idx: i32) {
+	overlay.states[idx] = i32(state)
+}
+clear_overlay_state :: proc() {
+	for i in 0 ..< len(overlay.states) {
+		set_item_state(.None, i32(i))
+	}
+}
+
+derive_overlay_state :: proc() -> Item_State {
+	for n in overlay.states {
+		state := Item_State(n)
+		switch state {
+		case .None:
+			continue
+		case .Moving, .Deleting:
+			return state
+		}
+	}
+	return .None
+}
+
+sync_overlay :: proc() {
+	for i in 0 ..< len(bindings) {
+		overlay.keys[i] = LABELS[i]
+		overlay.names[i] = bindings[i].bundle_id
+	}
+}
+
+refresh_overlay :: proc() {
+	sync_overlay()
+	platform_show_overlay(
+		&overlay.keys[0],
+		&overlay.names[0],
+		&overlay.states[0],
+		i32(len(bindings)),
+		overlay.active,
 	)
 }
 

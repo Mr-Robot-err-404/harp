@@ -136,7 +136,6 @@ foreign platform {
 	platform_screen_rect :: proc "c" () -> CG_Rect ---
 	platform_fill_window :: proc "c" (pid: i32, rect: CG_Rect) ---
 	platform_show_overlay :: proc "c" (keys: [^]cstring, names: [^]cstring, states: [^]i32, count: i32, active: i32) ---
-	platform_set_overlay_active :: proc "c" (active: i32) ---
-	platform_redraw_overlay :: proc "c" () ---
+
 	platform_hide_overlay :: proc "c" () ---
 }

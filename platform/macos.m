@@ -246,18 +246,6 @@ void platform_show_overlay(const char **keys, const char **names, const int *sta
   });
 }
 
-void platform_set_overlay_active(int active) {
-  dispatch_async(dispatch_get_main_queue(), ^{
-    g_active = active;
-    [g_overlay.contentView setNeedsDisplay:YES];
-  });
-}
-
-void platform_redraw_overlay(void) {
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [g_overlay.contentView setNeedsDisplay:YES];
-  });
-}
 
 void platform_hide_overlay(void) {
   dispatch_async(dispatch_get_main_queue(), ^{
