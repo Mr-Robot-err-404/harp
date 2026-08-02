@@ -13,35 +13,54 @@ Binding :: struct {
 DefaultBindings :: "com.mitchellh.ghostty\ncom.google.Chrome\ncom.spotify.client\ncom.hnc.discord\n"
 
 MAX_BINDINGS :: 36
-bindings: [dynamic]Binding
-g_tap: CF_Mach_Port_Ref
 
 Item_State :: enum i32 {
 	None     = 0,
 	Moving   = 1,
 	Deleting = 2,
 }
+Open :: enum {
+	None,
+	Overlay,
+	Search,
+}
 Overlay :: struct {
-	open:   bool,
 	active: i32,
 	keys:   [MAX_BINDINGS]cstring,
 	names:  [MAX_BINDINGS]cstring,
 	states: [MAX_BINDINGS]i32,
 	prev:   CG_Key_Code,
 }
-overlay: Overlay
+Search :: struct {
+	query:   string,
+	results: [dynamic]cstring,
+	active:  i32,
+}
+State :: struct {
+	bindings: [dynamic]Binding,
+	overlay:  Overlay,
+	search:   Search,
+	modal:    Open,
+}
+
+g_tap: CF_Mach_Port_Ref
 
 main :: proc() {
+	state := State {
+		bindings = make([dynamic]Binding),
+		search = Search{results = make([dynamic]cstring)},
+	}
+	defer {
+		for b in state.bindings do delete(string(b.bundle_id))
+		delete(state.bindings)
+		delete(state.search.results)
+	}
+
 	if !is_setup() {setup()}
 
-	bindings = make([dynamic]Binding)
-	defer {
-		for b in bindings do delete(string(b.bundle_id))
-		delete(bindings)
-	}
-	read_bindings()
-	if len(bindings) == 0 {use_default_bindings(&bindings)}
-	build_overlay_data()
+	read_bindings(&state)
+	if len(state.bindings) == 0 {use_default_bindings(&state.bindings)}
+	build_overlay_data(&state)
 
 	if platform_request_accessibility() == 0 {
 		fmt.println("[harp] waiting for accessibility permission...")
@@ -56,7 +75,7 @@ main :: proc() {
 		kCGEventTapOptionDefault,
 		cg_event_mask_bit(kCGEventKeyDown),
 		on_key,
-		nil,
+		&state,
 	)
 	if g_tap == nil {
 		fmt.println("[harp] failed to create event tap.")
@@ -91,111 +110,126 @@ on_key :: proc "c" (
 	refcon: rawptr,
 ) -> CG_Event_Ref {
 	context = runtime.default_context()
+	s := (^State)(refcon)
 
 	if kind == kCGEventTapDisabledByTimeout || kind == kCGEventTapDisabledByUserInput {
 		if g_tap != nil do CGEventTapEnable(g_tap, true)
 		return event
 	}
 	keycode := CG_Key_Code(CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode))
-	defer overlay.prev = keycode
+	defer s.overlay.prev = keycode
 
-	if keycode != kVK_ANSI_X {clear_deleting_items()}
+	switch s.modal {
+	case .Overlay:
+		if keycode != kVK_ANSI_X {clear_deleting_items(s)}
 
-	if overlay.open {
-		n := i32(len(bindings))
+		n := i32(len(s.bindings))
 		switch keycode {
 		case kVK_Return:
-			overlay.open = false
+			s.modal = .None
 			platform_hide_overlay()
-			switch_to(bindings[overlay.active].bundle_id)
+			switch_to(s.bindings[s.overlay.active].bundle_id)
 
 		case kVK_ANSI_X:
-			defer refresh_overlay()
+			defer refresh_overlay(s)
 
-			if Item_State(overlay.states[overlay.active]) != .Deleting {
-				clear_overlay_state()
-				set_item_state(.Deleting, overlay.active)
+			if Item_State(s.overlay.states[s.overlay.active]) != .Deleting {
+				clear_overlay_state(s)
+				set_item_state(s, .Deleting, s.overlay.active)
 				break
 			}
-			switch overlay.prev {
+			switch s.overlay.prev {
 			case kVK_ANSI_X:
-				ordered_remove(&bindings, overlay.active)
-				clear_overlay_state()
-				rekey_bindings()
+				ordered_remove(&s.bindings, s.overlay.active)
+				clear_overlay_state(s)
+				rekey_bindings(s)
 			case:
-				set_item_state(.Deleting, overlay.active)
+				set_item_state(s, .Deleting, s.overlay.active)
 			}
 
 		case kVK_Space:
-			overlay_state := derive_overlay_state()
+			overlay_state := derive_overlay_state(s)
 
-			switch Item_State(overlay.states[overlay.active]) {
+			switch Item_State(s.overlay.states[s.overlay.active]) {
 			case .None:
-				set_item_state(.Moving, overlay.active)
+				set_item_state(s, .Moving, s.overlay.active)
 				if overlay_state != .Moving {break}
 
-				idx, ok := find_target_idx(overlay.active, .Moving)
+				idx, ok := find_target_idx(s, s.overlay.active, .Moving)
 				if !ok {panic("WTF")}
-				swap_bindings(overlay.active, idx)
-				clear_overlay_state()
-				sync_overlay()
+				swap_bindings(s, s.overlay.active, idx)
+				clear_overlay_state(s)
+				sync_overlay(s)
 
 			case .Moving:
-				set_item_state(.None, overlay.active)
+				set_item_state(s, .None, s.overlay.active)
 			case .Deleting:
-				set_item_state(.Moving, overlay.active)
+				set_item_state(s, .Moving, s.overlay.active)
 			}
-			refresh_overlay()
-			log_overlay_state()
+			refresh_overlay(s)
+			log_overlay_state(s)
 
 		case kVK_Escape:
-			if overlay.prev == kVK_ANSI_X && derive_overlay_state() != Item_State.None {
-				refresh_overlay()
+			if s.overlay.prev == kVK_ANSI_X && derive_overlay_state(s) != Item_State.None {
+				refresh_overlay(s)
 				break
 			}
-			overlay.open = false
+			s.modal = .None
 			platform_hide_overlay()
 		case kVK_ANSI_J:
-			overlay.active = (overlay.active + 1) % n
-			refresh_overlay()
+			s.overlay.active = (s.overlay.active + 1) % n
+			refresh_overlay(s)
 		case kVK_ANSI_K:
-			overlay.active = (overlay.active - 1 + n) % n
-			refresh_overlay()
+			s.overlay.active = (s.overlay.active - 1 + n) % n
+			refresh_overlay(s)
 		}
 		return nil
-	}
-	flags := CGEventGetFlags(event)
-	if !is_leader_key(flags) {return event}
-
-	switch keycode {
-	case kVK_ANSI_Slash:
-		results := []cstring{"Ghostty", "Ghost Browser"}
-		platform_show_search("ghost", raw_data(results[:]), 2, 0)
-	case kVK_ANSI_Y:
-		app := platform_frontmost_app()
-		for b in bindings {
-			if b.bundle_id == app {return nil}
+	case .Search:
+		switch keycode {
+		case kVK_Escape:
+			s.modal = .None
+			platform_hide_search()
 		}
-		if len(bindings) >= MAX_BINDINGS {return nil}
-		idx := len(bindings)
-		append(
-			&bindings,
-			Binding{key = keys[idx], bundle_id = strings.clone_to_cstring(string(app))},
-		)
-		switch_to(bindings[idx].bundle_id)
 		return nil
+	case .None:
+		flags := CGEventGetFlags(event)
+		if !is_leader_key(flags) {return event}
 
-	case kVK_ANSI_Semicolon:
-		idx := active_binding_idx()
-		overlay.active = idx
-		overlay.open = true
-		refresh_overlay()
-		return nil
-	}
-	for b in bindings {
-		if keycode == b.key {
-			switch_to(b.bundle_id)
+		switch keycode {
+		case kVK_ANSI_Comma:
+			s.modal = .Search
+			append(&s.search.results, "Ghostty")
+			platform_show_search(
+				"ghost",
+				raw_data(s.search.results[:]),
+				i32(len(s.search.results)),
+				0,
+			)
+		case kVK_ANSI_Y:
+			app := platform_frontmost_app()
+			for b in s.bindings {
+				if b.bundle_id == app {return nil}
+			}
+			if len(s.bindings) >= MAX_BINDINGS {return nil}
+			idx := len(s.bindings)
+			append(
+				&s.bindings,
+				Binding{key = keys[idx], bundle_id = strings.clone_to_cstring(string(app))},
+			)
+			switch_to(s.bindings[idx].bundle_id)
 			return nil
+
+		case kVK_ANSI_Semicolon:
+			s.overlay.active = active_binding_idx(s)
+			s.modal = .Overlay
+			refresh_overlay(s)
+			return nil
+		}
+		for b in s.bindings {
+			if keycode == b.key {
+				switch_to(b.bundle_id)
+				return nil
+			}
 		}
 	}
 	return event
@@ -210,37 +244,37 @@ is_leader_key :: proc(flags: CG_Event_Flags) -> bool {
 	)
 }
 
-swap_bindings :: proc(a, b: i32) {
-	tmp := bindings[a].bundle_id
-	bindings[a].bundle_id = bindings[b].bundle_id
-	bindings[b].bundle_id = tmp
+swap_bindings :: proc(s: ^State, a, b: i32) {
+	tmp := s.bindings[a].bundle_id
+	s.bindings[a].bundle_id = s.bindings[b].bundle_id
+	s.bindings[b].bundle_id = tmp
 }
 
-find_target_idx :: proc(current: i32, state: Item_State) -> (i32, bool) {
-	for i: i32; i < i32(len(bindings)); i += 1 {
+find_target_idx :: proc(s: ^State, current: i32, state: Item_State) -> (i32, bool) {
+	for i: i32; i < i32(len(s.bindings)); i += 1 {
 		if i == current {continue}
-		if state == Item_State(overlay.states[i]) {return i, true}
+		if state == Item_State(s.overlay.states[i]) {return i, true}
 	}
 	return -1, false
 }
 
-set_item_state :: proc(state: Item_State, idx: i32) {
-	overlay.states[idx] = i32(state)
+set_item_state :: proc(s: ^State, state: Item_State, idx: i32) {
+	s.overlay.states[idx] = i32(state)
 }
-clear_overlay_state :: proc() {
-	for i in 0 ..< len(overlay.states) {
-		set_item_state(.None, i32(i))
+clear_overlay_state :: proc(s: ^State) {
+	for i in 0 ..< len(s.overlay.states) {
+		set_item_state(s, .None, i32(i))
 	}
 }
-clear_deleting_items :: proc() {
-	for i in 0 ..< len(overlay.states) {
-		if Item_State(overlay.states[i]) != .Deleting {continue}
-		set_item_state(.None, i32(i))
+clear_deleting_items :: proc(s: ^State) {
+	for i in 0 ..< len(s.overlay.states) {
+		if Item_State(s.overlay.states[i]) != .Deleting {continue}
+		set_item_state(s, .None, i32(i))
 	}
 }
 
-derive_overlay_state :: proc() -> Item_State {
-	for n in overlay.states {
+derive_overlay_state :: proc(s: ^State) -> Item_State {
+	for n in s.overlay.states {
 		state := Item_State(n)
 		switch state {
 		case .None:
@@ -252,42 +286,42 @@ derive_overlay_state :: proc() -> Item_State {
 	return .None
 }
 
-rekey_bindings :: proc() {
-	for i in 0 ..< len(bindings) {
-		bindings[i].key = keys[i]
+rekey_bindings :: proc(s: ^State) {
+	for i in 0 ..< len(s.bindings) {
+		s.bindings[i].key = keys[i]
 	}
 }
 
-sync_overlay :: proc() {
-	for i in 0 ..< len(bindings) {
-		overlay.keys[i] = LABELS[i]
-		overlay.names[i] = platform_app_name(bindings[i].bundle_id)
+sync_overlay :: proc(s: ^State) {
+	for i in 0 ..< len(s.bindings) {
+		s.overlay.keys[i] = LABELS[i]
+		s.overlay.names[i] = platform_app_name(s.bindings[i].bundle_id)
 	}
 }
 
-refresh_overlay :: proc() {
-	sync_overlay()
+refresh_overlay :: proc(s: ^State) {
+	sync_overlay(s)
 	platform_show_overlay(
-		&overlay.keys[0],
-		&overlay.names[0],
-		&overlay.states[0],
-		i32(len(bindings)),
-		overlay.active,
+		&s.overlay.keys[0],
+		&s.overlay.names[0],
+		&s.overlay.states[0],
+		i32(len(s.bindings)),
+		s.overlay.active,
 	)
 }
 
-build_overlay_data :: proc() {
-	for i in 0 ..< len(bindings) {
-		overlay.keys[i] = LABELS[i]
-		overlay.names[i] = platform_app_name(bindings[i].bundle_id)
-		overlay.states[i] = i32(Item_State.None)
+build_overlay_data :: proc(s: ^State) {
+	for i in 0 ..< len(s.bindings) {
+		s.overlay.keys[i] = LABELS[i]
+		s.overlay.names[i] = platform_app_name(s.bindings[i].bundle_id)
+		s.overlay.states[i] = i32(Item_State.None)
 	}
 }
 
-active_binding_idx :: proc() -> i32 {
+active_binding_idx :: proc(s: ^State) -> i32 {
 	id := platform_frontmost_app()
-	for i in 0 ..< len(bindings) {
-		if string(bindings[i].bundle_id) == string(id) {
+	for i in 0 ..< len(s.bindings) {
+		if string(s.bindings[i].bundle_id) == string(id) {
 			return i32(i)
 		}
 	}

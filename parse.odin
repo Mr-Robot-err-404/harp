@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 
-read_bindings :: proc() {
+read_bindings :: proc(s: ^State) {
 	home := os.get_env("HOME")
 	defer delete(home)
 	if home == "" {
@@ -33,10 +33,10 @@ read_bindings :: proc() {
 	disable_stage_manager()
 
 	defer delete(data)
-	for b in bindings {
+	for b in s.bindings {
 		delete(string(b.bundle_id))
 	}
-	clear(&bindings)
+	clear(&s.bindings)
 
 	str := string(data)
 	i := 0
@@ -49,7 +49,7 @@ read_bindings :: proc() {
 			skipped += 1
 			continue
 		}
-		append(&bindings, Binding{key = keys[i], bundle_id = strings.clone_to_cstring(trimmed)})
+		append(&s.bindings, Binding{key = keys[i], bundle_id = strings.clone_to_cstring(trimmed)})
 		i += 1
 	}
 	if skipped > 0 {

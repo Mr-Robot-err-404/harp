@@ -142,6 +142,8 @@ static int       g_mode           = HARP_MODE_LIST;
 static NSString *g_search_query   = nil;
 static NSArray  *g_search_results = nil;
 static int       g_search_active  = 0;
+static BOOL      g_cursor_visible = YES;
+static NSTimer  *g_cursor_timer   = nil;
 
 @interface HarpOverlayView : NSView
 @end
@@ -179,13 +181,15 @@ static int       g_search_active  = 0;
     };
     [display drawAtPoint:NSMakePoint(pad_x, bar_y + 12) withAttributes:query_attrs];
 
-    // Cursor line at end of query text
-    NSSize text_size = [display sizeWithAttributes:query_attrs];
-    NSDictionary *cursor_attrs = @{
-      NSFontAttributeName: [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightRegular],
-      NSForegroundColorAttributeName: KG_ACT,
-    };
-    [@"|" drawAtPoint:NSMakePoint(pad_x + text_size.width, bar_y + 12) withAttributes:cursor_attrs];
+    // Blinking cursor
+    if (g_cursor_visible) {
+      NSSize text_size = [display sizeWithAttributes:query_attrs];
+      NSDictionary *cursor_attrs = @{
+        NSFontAttributeName: [NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightRegular],
+        NSForegroundColorAttributeName: KG_ACT,
+      };
+      [@"|" drawAtPoint:NSMakePoint(pad_x + text_size.width, bar_y + 12) withAttributes:cursor_attrs];
+    }
 
     // Results
     if (!g_search_results.count) return;
@@ -322,10 +326,21 @@ void platform_show_search(const char *query, const char **results, int count, in
     [rs addObject:[NSString stringWithUTF8String:results[i]]];
 
   dispatch_async(dispatch_get_main_queue(), ^{
-    g_search_query  = q;
+    g_search_query   = q;
     g_search_results = rs;
     g_search_active  = active;
     g_mode           = HARP_MODE_SEARCH;
+    g_cursor_visible = YES;
+
+    if (!g_cursor_timer) {
+      g_cursor_timer = [NSTimer scheduledTimerWithTimeInterval:0.5
+                                                       repeats:YES
+                                                         block:^(NSTimer *t) {
+        g_cursor_visible = !g_cursor_visible;
+        [g_overlay.contentView setNeedsDisplay:YES];
+      }];
+    }
+
     [g_overlay.contentView setNeedsDisplay:YES];
     [g_overlay orderFrontRegardless];
   });
@@ -333,6 +348,9 @@ void platform_show_search(const char *query, const char **results, int count, in
 
 void platform_hide_search(void) {
   dispatch_async(dispatch_get_main_queue(), ^{
+    [g_cursor_timer invalidate];
+    g_cursor_timer   = nil;
+    g_cursor_visible = YES;
     g_mode           = HARP_MODE_LIST;
     g_search_query   = nil;
     g_search_results = nil;
