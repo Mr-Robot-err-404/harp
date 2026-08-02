@@ -9,5 +9,6 @@ int    platform_launch_app(const char *bundle_id);
 CGRect platform_screen_rect(void);
 void   platform_fill_window(int pid, CGRect rect);
 const char *platform_frontmost_app(void);
+const char *platform_app_name(const char *bundle_id);
 void   platform_show_overlay(const char **keys, const char **names, const int *states, int count, int active);
 void   platform_hide_overlay(void);

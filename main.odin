@@ -1,5 +1,6 @@
 package harp
 
+import "base:runtime"
 import "core:fmt"
 import "core:os/os2"
 import "core:strings"
@@ -89,7 +90,7 @@ on_key :: proc "c" (
 	event: CG_Event_Ref,
 	refcon: rawptr,
 ) -> CG_Event_Ref {
-	context = {}
+	context = runtime.default_context()
 
 	if kind == kCGEventTapDisabledByTimeout || kind == kCGEventTapDisabledByUserInput {
 		if g_tap != nil do CGEventTapEnable(g_tap, true)
@@ -166,7 +167,22 @@ on_key :: proc "c" (
 	flags := CGEventGetFlags(event)
 	if !is_leader_key(flags) {return event}
 
-	if keycode == kVK_ANSI_Semicolon {
+	switch keycode {
+	case kVK_ANSI_Y:
+		app := platform_frontmost_app()
+		for b in bindings {
+			if b.bundle_id == app {return nil}
+		}
+		if len(bindings) >= MAX_BINDINGS {return nil}
+		idx := len(bindings)
+		append(
+			&bindings,
+			Binding{key = keys[idx], bundle_id = strings.clone_to_cstring(string(app))},
+		)
+		switch_to(bindings[idx].bundle_id)
+		return nil
+
+	case kVK_ANSI_Semicolon:
 		idx := active_binding_idx()
 		overlay.active = idx
 		overlay.open = true
@@ -242,7 +258,7 @@ rekey_bindings :: proc() {
 sync_overlay :: proc() {
 	for i in 0 ..< len(bindings) {
 		overlay.keys[i] = LABELS[i]
-		overlay.names[i] = bindings[i].bundle_id
+		overlay.names[i] = platform_app_name(bindings[i].bundle_id)
 	}
 }
 
@@ -260,7 +276,7 @@ refresh_overlay :: proc() {
 build_overlay_data :: proc() {
 	for i in 0 ..< len(bindings) {
 		overlay.keys[i] = LABELS[i]
-		overlay.names[i] = bindings[i].bundle_id
+		overlay.names[i] = platform_app_name(bindings[i].bundle_id)
 		overlay.states[i] = i32(Item_State.None)
 	}
 }

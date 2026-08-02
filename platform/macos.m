@@ -90,6 +90,27 @@ const char *platform_frontmost_app(void) {
   return app.bundleIdentifier.UTF8String;
 }
 
+const char *platform_app_name(const char *bundle_id) {
+  NSString *bid = [NSString stringWithUTF8String:bundle_id];
+
+  NSArray<NSRunningApplication *> *apps =
+      [NSRunningApplication runningApplicationsWithBundleIdentifier:bid];
+  if (apps.count > 0)
+    return apps.firstObject.localizedName.UTF8String;
+
+  NSURL *url =
+      [[NSWorkspace sharedWorkspace] URLForApplicationWithBundleIdentifier:bid];
+  if (url) {
+    NSBundle *bundle = [NSBundle bundleWithURL:url];
+    NSString *name = [bundle objectForInfoDictionaryKey:@"CFBundleDisplayName"]
+                         ?: [bundle objectForInfoDictionaryKey:@"CFBundleName"];
+    if (name)
+      return name.UTF8String;
+  }
+
+  return bundle_id;
+}
+
 // ---------------------------------------------------------------------------
 // Overlay
 // ---------------------------------------------------------------------------

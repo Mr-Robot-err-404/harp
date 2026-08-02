@@ -129,6 +129,7 @@ foreign import platform "platform/macos.o"
 @(link_prefix = "")
 foreign platform {
 	platform_frontmost_app :: proc "c" () -> cstring ---
+	platform_app_name :: proc "c" (bundle_id: cstring) -> cstring ---
 	platform_check_accessibility :: proc "c" () -> i32 ---
 	platform_request_accessibility :: proc "c" () -> i32 ---
 	platform_find_app :: proc "c" (bundle_id: cstring) -> i32 ---

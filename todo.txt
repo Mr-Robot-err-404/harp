@@ -4,6 +4,8 @@
 [✔] List of active bindings
 [✔] Move items in list
 [✔] Delete from list
+[✔] Extract app names from key
+[✔] Append open app to the list
 [·] Search for apps
 [·] Duplicate apps
 [·] App history
