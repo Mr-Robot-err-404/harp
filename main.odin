@@ -13,6 +13,7 @@ Binding :: struct {
 DefaultBindings :: "com.mitchellh.ghostty\ncom.google.Chrome\ncom.spotify.client\ncom.hnc.discord\n"
 
 MAX_BINDINGS :: 36
+MAX_APPS :: 1024
 
 Item_State :: enum i32 {
 	None     = 0,
@@ -42,6 +43,9 @@ State :: struct {
 	search:   Search,
 	modal:    Open,
 }
+app_names: [MAX_APPS]cstring
+app_bundle_ids: [MAX_APPS]cstring
+app_count := platform_get_all_apps(&app_names[0], &app_bundle_ids[0], MAX_APPS)
 
 g_tap: CF_Mach_Port_Ref
 
@@ -189,12 +193,19 @@ on_key :: proc "c" (
 		case kVK_Escape:
 			s.modal = .None
 			platform_hide_search()
+			return nil
+
+		case kVK_Delete:
+			strings.pop_rune(&s.search.query)
+			refresh_search(s)
 		case:
 			buf: [4]u16
 			len: CF_Index
 			CGEventKeyboardGetUnicodeString(event, 4, &len, &buf[0])
 			if len == 1 && buf[0] >= 32 && buf[0] < 127 {
+				strings.write_rune(&s.search.query, rune(buf[0]))
 			}
+			refresh_search(s)
 		}
 		return nil
 	case .None:
@@ -204,12 +215,7 @@ on_key :: proc "c" (
 		switch keycode {
 		case kVK_ANSI_Comma:
 			s.modal = .Search
-			platform_show_search(
-				strings.to_cstring(&s.search.query),
-				raw_data(s.search.results[:]),
-				i32(len(s.search.results)),
-				0,
-			)
+			refresh_search(s)
 			return nil
 		case kVK_ANSI_Y:
 			app := platform_frontmost_app()
@@ -303,6 +309,15 @@ sync_overlay :: proc(s: ^State) {
 		s.overlay.keys[i] = LABELS[i]
 		s.overlay.names[i] = platform_app_name(s.bindings[i].bundle_id)
 	}
+}
+
+refresh_search :: proc(s: ^State) {
+	platform_show_search(
+		strings.to_cstring(&s.search.query),
+		raw_data(s.search.results[:]),
+		i32(len(s.search.results)),
+		0,
+	)
 }
 
 refresh_overlay :: proc(s: ^State) {

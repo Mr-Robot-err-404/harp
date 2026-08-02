@@ -1,4 +1,5 @@
 #import <ApplicationServices/ApplicationServices.h>
+
 #include <Carbon/Carbon.h>
 #import <Cocoa/Cocoa.h>
 #include <unistd.h>
@@ -109,6 +110,43 @@ const char *platform_app_name(const char *bundle_id) {
   }
 
   return bundle_id;
+}
+
+// ---------------------------------------------------------------------------
+// App list
+
+static NSArray<NSURL *> *all_app_urls(void) {
+  return [[NSFileManager defaultManager]
+      contentsOfDirectoryAtURL:[NSURL fileURLWithPath:@"/Applications"]
+      includingPropertiesForKeys:@[NSURLLocalizedNameKey]
+      options:NSDirectoryEnumerationSkipsHiddenFiles
+      error:nil];
+}
+
+int platform_get_app_count(void) {
+  return (int)all_app_urls().count;
+}
+
+int platform_get_all_apps(const char **names_out, const char **bundle_ids_out, int max_count) {
+  NSArray<NSURL *> *urls = all_app_urls();
+  int count = 0;
+  for (NSURL *url in urls) {
+    if (count >= max_count) break;
+    NSBundle *bundle = [NSBundle bundleWithURL:url];
+    if (!bundle) continue;
+
+    NSString *bundle_id = bundle.bundleIdentifier;
+    if (!bundle_id) continue;
+
+    NSString *name = [bundle objectForInfoDictionaryKey:@"CFBundleDisplayName"]
+                  ?: [bundle objectForInfoDictionaryKey:@"CFBundleName"];
+    if (!name) continue;
+
+    names_out[count]      = name.UTF8String;
+    bundle_ids_out[count] = bundle_id.UTF8String;
+    count++;
+  }
+  return count;
 }
 
 // ---------------------------------------------------------------------------

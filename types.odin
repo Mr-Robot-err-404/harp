@@ -51,6 +51,7 @@ kCGEventFlagMaskAlternate: CG_Event_Flags : 0x00080000
 kVK_Escape: CG_Key_Code : 0x35
 kVK_Return: CG_Key_Code : 0x24
 kVK_Space: CG_Key_Code : 0x31
+kVK_Delete: CG_Key_Code : 0x33
 
 // Numbers
 kVK_ANSI_0: CG_Key_Code : 0x1D
@@ -144,4 +145,6 @@ foreign platform {
 	platform_hide_overlay :: proc "c" () ---
 	platform_show_search :: proc "c" (query: cstring, results: [^]cstring, count: i32, active: i32) ---
 	platform_hide_search :: proc "c" () ---
+	platform_get_all_apps :: proc "c" (names_out: [^]cstring, bundle_ids_out: [^]cstring, max_count: i32) -> i32 ---
+	platform_get_app_count :: proc "c" () -> i32 ---
 }

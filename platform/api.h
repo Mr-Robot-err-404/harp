@@ -14,3 +14,5 @@ void   platform_show_overlay(const char **keys, const char **names, const int *s
 void   platform_hide_overlay(void);
 void   platform_show_search(const char *query, const char **results, int count, int active);
 void   platform_hide_search(void);
+int    platform_get_all_apps(const char **names_out, const char **bundle_ids_out, int max_count);
+int    platform_get_app_count(void);
