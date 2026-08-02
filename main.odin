@@ -54,6 +54,7 @@ main :: proc() {
 		bindings = make([dynamic]Binding),
 		search = Search{results = make([dynamic]cstring), query = strings.Builder{}},
 	}
+	fill_search_results(&state.search.results)
 	defer {
 		for b in state.bindings do delete(string(b.bundle_id))
 		delete(state.bindings)
@@ -196,7 +197,14 @@ on_key :: proc "c" (
 			return nil
 
 		case kVK_Delete:
+			if len(strings.to_string(s.search.query)) == 0 {break}
 			strings.pop_rune(&s.search.query)
+
+			if len(strings.to_string(s.search.query)) == 0 {
+				fill_search_results(&s.search.results)
+			} else {
+				search_query(s, strings.to_string(s.search.query))
+			}
 			refresh_search(s)
 		case:
 			buf: [4]u16
@@ -205,6 +213,7 @@ on_key :: proc "c" (
 			if len == 1 && buf[0] >= 32 && buf[0] < 127 {
 				strings.write_rune(&s.search.query, rune(buf[0]))
 			}
+			search_query(s, strings.to_string(s.search.query))
 			refresh_search(s)
 		}
 		return nil
@@ -246,6 +255,13 @@ on_key :: proc "c" (
 	}
 	return event
 }
+
+fill_search_results :: proc(results: ^[dynamic]cstring) {
+	for i in 0 ..< app_count {
+		append(results, app_names[i])
+	}
+}
+
 
 is_leader_key :: proc(flags: CG_Event_Flags) -> bool {
 	return(
