@@ -512,7 +512,91 @@ void platform_hide_overlay(void) {
 
 // ---------------------------------------------------------------------------
 
-void platform_fill_window(int pid, CGRect rect) {
+// ---------------------------------------------------------------------------
+// Screen helpers
+
+// Returns the screen best matching the given window frame (max intersection).
+// Falls back to mainScreen if no intersection found.
+static NSScreen *screen_for_window(AXUIElementRef window) {
+  CGRect win_frame = CGRectZero;
+  AXValueRef frame_val = NULL;
+  AXUIElementCopyAttributeValue(window, CFSTR("AXFrame"), (CFTypeRef *)&frame_val);
+  if (frame_val) {
+    AXValueGetValue(frame_val, kAXValueCGRectType, &win_frame);
+    CFRelease(frame_val);
+  }
+
+  NSScreen *target = nil;
+  CGFloat best_area = -1;
+  for (NSScreen *s in [NSScreen screens]) {
+    CGRect intersection = CGRectIntersection(s.frame, win_frame);
+    CGFloat area = intersection.size.width * intersection.size.height;
+    if (area > best_area) {
+      best_area = area;
+      target = s;
+    }
+  }
+  return target ?: [NSScreen mainScreen];
+}
+
+// Snap position + size of window to its current screen's visibleFrame.
+// No focus, no raise — geometry only.
+static void snap_window_geometry(AXUIElementRef window) {
+  NSRect r = screen_for_window(window).visibleFrame;
+  CGPoint origin = CGPointMake(r.origin.x, r.origin.y);
+  CGSize  size   = CGSizeMake(r.size.width, r.size.height);
+
+  AXValueRef pos_val  = AXValueCreate(kAXValueCGPointType, &origin);
+  AXValueRef size_val = AXValueCreate(kAXValueCGSizeType,  &size);
+
+  int cid = SLSMainConnectionID();
+  SLSDisableUpdate(cid);
+  AXUIElementSetAttributeValue(window, kAXPositionAttribute, pos_val);
+  AXUIElementSetAttributeValue(window, kAXSizeAttribute,     size_val);
+  SLSReenableUpdate(cid);
+
+  CFRelease(pos_val);
+  CFRelease(size_val);
+}
+
+// ---------------------------------------------------------------------------
+// Screen-change notification
+
+typedef void (*screen_change_cb)(void *ctx);
+static screen_change_cb g_screen_cb  = NULL;
+static void             *g_screen_ctx = NULL;
+
+void platform_register_screen_change_handler(screen_change_cb cb, void *ctx) {
+  g_screen_cb  = cb;
+  g_screen_ctx = ctx;
+  [[[NSWorkspace sharedWorkspace] notificationCenter]
+      addObserverForName:NSWorkspaceActiveSpaceDidChangeNotification
+                  object:nil
+                   queue:[NSOperationQueue mainQueue]
+              usingBlock:^(NSNotification *note) { (void)note; }];
+  [[NSNotificationCenter defaultCenter]
+      addObserverForName:NSApplicationDidChangeScreenParametersNotification
+                  object:nil
+                   queue:[NSOperationQueue mainQueue]
+              usingBlock:^(NSNotification *note) {
+                (void)note;
+                if (g_screen_cb) g_screen_cb(g_screen_ctx);
+              }];
+}
+
+void platform_snap_window(int pid) {
+  AXUIElementRef ax_app = AXUIElementCreateApplication((pid_t)pid);
+  AXUIElementRef window = find_window(ax_app);
+  if (window) {
+    snap_window_geometry(window);
+    CFRelease(window);
+  }
+  CFRelease(ax_app);
+}
+
+// ---------------------------------------------------------------------------
+
+void platform_fill_window(int pid) {
   AXUIElementRef ax_app = AXUIElementCreateApplication((pid_t)pid);
 
   AXUIElementRef window = find_window(ax_app);
@@ -541,6 +625,10 @@ void platform_fill_window(int pid, CGRect rect) {
     return;
   }
 
+  NSRect r = screen_for_window(window).visibleFrame;
+  CGPoint origin = CGPointMake(r.origin.x, r.origin.y);
+  CGSize size = CGSizeMake(r.size.width, r.size.height);
+
   // Get PSN from pid — deprecated but functional on macOS 26.
   ProcessSerialNumber psn = {0, 0};
 #pragma clang diagnostic push
@@ -552,9 +640,6 @@ void platform_fill_window(int pid, CGRect rect) {
     CFRelease(ax_app);
     return;
   }
-
-  CGPoint origin = CGPointMake(rect.origin.x, rect.origin.y);
-  CGSize size = CGSizeMake(rect.size.width, rect.size.height);
   AXValueRef pos_val = AXValueCreate(kAXValueCGPointType, &origin);
   AXValueRef size_val = AXValueCreate(kAXValueCGSizeType, &size);
 

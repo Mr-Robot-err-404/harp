@@ -69,6 +69,7 @@ main :: proc() {
 
 	read_bindings(&state)
 	build_overlay_data(&state)
+	platform_register_screen_change_handler(on_screen_change, &state)
 
 	if platform_request_accessibility() == 0 {
 		fmt.println("[harp] waiting for accessibility permission...")
@@ -108,7 +109,7 @@ switch_to :: proc(bundle_id: cstring) {
 			return
 		}
 	}
-	platform_fill_window(pid, platform_screen_rect())
+	platform_fill_window(pid)
 }
 
 on_key :: proc "c" (
@@ -425,6 +426,17 @@ active_binding_idx :: proc(s: ^State) -> i32 {
 		}
 	}
 	return 0
+}
+
+on_screen_change :: proc "c" (ctx: rawptr) {
+	context = runtime.default_context()
+	s := (^State)(ctx)
+	for b in s.bindings {
+		if b.bundle_id == EMPTY_BINDING {continue}
+		pid := platform_find_app(b.bundle_id)
+		if pid == -1 {continue}
+		platform_snap_window(pid)
+	}
 }
 
 disable_stage_manager :: proc() {

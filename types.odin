@@ -140,8 +140,9 @@ foreign platform {
 	platform_request_accessibility :: proc "c" () -> i32 ---
 	platform_find_app :: proc "c" (bundle_id: cstring) -> i32 ---
 	platform_launch_app :: proc "c" (bundle_id: cstring) -> i32 ---
-	platform_screen_rect :: proc "c" () -> CG_Rect ---
-	platform_fill_window :: proc "c" (pid: i32, rect: CG_Rect) ---
+	platform_fill_window :: proc "c" (pid: i32) ---
+	platform_snap_window :: proc "c" (pid: i32) ---
+	platform_register_screen_change_handler :: proc "c" (cb: proc "c" (ctx: rawptr), ctx: rawptr) ---
 	platform_show_overlay :: proc "c" (keys: [^]cstring, names: [^]cstring, states: [^]i32, count: i32, active: i32) ---
 
 	platform_hide_overlay :: proc "c" () ---

@@ -9,5 +9,9 @@
 [✔] Search for apps
 [✔] Persist keybinds
 
+[·] Use separate thread for launching an app
+[·] Loading screen with app name
+[·] Responsiveness when switching screens
+[·] Append app from search with notification
 [·] Windowing for lists
 [·] Config file
