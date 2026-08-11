@@ -398,6 +398,45 @@ static NSTimer  *g_cursor_timer   = nil;
 
 @end
 
+static const CGFloat OVERLAY_W = 480;
+static const CGFloat OVERLAY_H = 320;
+
+static NSRect overlay_centered_frame(void) {
+  NSPoint mouse = [NSEvent mouseLocation];
+  NSScreen *screen = nil;
+  for (NSScreen *s in [NSScreen screens]) {
+    if (NSMouseInRect(mouse, s.frame, NO)) {
+      screen = s;
+      break;
+    }
+  }
+  if (!screen) screen = [NSScreen mainScreen];
+  NSRect r = screen.visibleFrame;
+  return NSMakeRect(
+    NSMidX(r) - OVERLAY_W / 2,
+    NSMidY(r) - OVERLAY_H / 2,
+    OVERLAY_W, OVERLAY_H
+  );
+}
+
+static void ensure_overlay(void) {
+  if (g_overlay) return;
+  NSRect frame = overlay_centered_frame();
+  g_overlay = [[NSPanel alloc]
+      initWithContentRect:frame
+                styleMask:NSWindowStyleMaskNonactivatingPanel | NSWindowStyleMaskBorderless
+                  backing:NSBackingStoreBuffered
+                    defer:NO];
+  g_overlay.level             = NSFloatingWindowLevel;
+  g_overlay.backgroundColor   = KG_BG;
+  g_overlay.opaque             = YES;
+  g_overlay.hasShadow          = NO;
+  g_overlay.releasedWhenClosed = NO;
+
+  HarpOverlayView *view = [[HarpOverlayView alloc] initWithFrame:NSMakeRect(0, 0, OVERLAY_W, OVERLAY_H)];
+  g_overlay.contentView = view;
+}
+
 void platform_show_overlay(const char **keys, const char **names, const int *states, int count, int active) {
   // Copy before dispatch — caller's stack may be gone by the time block runs.
   NSMutableArray *ks = [NSMutableArray arrayWithCapacity:count];
@@ -415,32 +454,13 @@ void platform_show_overlay(const char **keys, const char **names, const int *sta
     g_overlay_states = ss;
     g_active         = active;
 
-    NSRect screen = [NSScreen mainScreen].visibleFrame;
-    CGFloat w = 480, h = 320;
-    NSRect frame = NSMakeRect(NSMidX(screen) - w / 2, NSMidY(screen) - h / 2, w, h);
-
-    if (!g_overlay) {
-      g_overlay = [[NSPanel alloc]
-          initWithContentRect:frame
-                    styleMask:NSWindowStyleMaskNonactivatingPanel | NSWindowStyleMaskBorderless
-                      backing:NSBackingStoreBuffered
-                        defer:NO];
-      g_overlay.level             = NSFloatingWindowLevel;
-      g_overlay.backgroundColor   = KG_BG;
-      g_overlay.opaque             = YES;
-      g_overlay.hasShadow          = NO;
-      g_overlay.releasedWhenClosed = NO;
-
-      HarpOverlayView *view = [[HarpOverlayView alloc] initWithFrame:NSMakeRect(0, 0, w, h)];
-      g_overlay.contentView = view;
-    }
-
+    ensure_overlay();
+    [g_overlay setFrame:overlay_centered_frame() display:NO];
     [g_overlay.contentView setNeedsDisplay:YES];
     [g_overlay orderFrontRegardless];
     [g_overlay makeFirstResponder:g_overlay.contentView];
   });
 }
-
 
 void platform_show_search(const char *query, const char **results, int count, int active) {
   NSString *q = [NSString stringWithUTF8String:query];
@@ -455,25 +475,8 @@ void platform_show_search(const char *query, const char **results, int count, in
     g_mode           = HARP_MODE_SEARCH;
     g_cursor_visible = YES;
 
-    NSRect screen = [NSScreen mainScreen].visibleFrame;
-    CGFloat w = 480, h = 320;
-    NSRect frame = NSMakeRect(NSMidX(screen) - w / 2, NSMidY(screen) - h / 2, w, h);
-
-    if (!g_overlay) {
-      g_overlay = [[NSPanel alloc]
-          initWithContentRect:frame
-                    styleMask:NSWindowStyleMaskNonactivatingPanel | NSWindowStyleMaskBorderless
-                      backing:NSBackingStoreBuffered
-                        defer:NO];
-      g_overlay.level             = NSFloatingWindowLevel;
-      g_overlay.backgroundColor   = KG_BG;
-      g_overlay.opaque             = YES;
-      g_overlay.hasShadow          = NO;
-      g_overlay.releasedWhenClosed = NO;
-
-      HarpOverlayView *view = [[HarpOverlayView alloc] initWithFrame:NSMakeRect(0, 0, w, h)];
-      g_overlay.contentView = view;
-    }
+    ensure_overlay();
+    [g_overlay setFrame:overlay_centered_frame() display:NO];
 
     if (!g_cursor_timer) {
       g_cursor_timer = [NSTimer scheduledTimerWithTimeInterval:0.5
@@ -625,7 +628,19 @@ void platform_fill_window(int pid) {
     return;
   }
 
-  NSRect r = screen_for_window(window).visibleFrame;
+  // Use mouse position to determine target screen — the user is switching
+  // from their current screen, so the window should follow them there.
+  NSPoint mouse = [NSEvent mouseLocation];
+  NSScreen *target_screen = nil;
+  for (NSScreen *s in [NSScreen screens]) {
+    if (NSMouseInRect(mouse, s.frame, NO)) {
+      target_screen = s;
+      break;
+    }
+  }
+  if (!target_screen) target_screen = [NSScreen mainScreen];
+
+  NSRect r = target_screen.visibleFrame;
   CGPoint origin = CGPointMake(r.origin.x, r.origin.y);
   CGSize size = CGSizeMake(r.size.width, r.size.height);
 
