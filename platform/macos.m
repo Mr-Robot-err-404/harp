@@ -150,7 +150,7 @@ void platform_show_loader(const char *bundle_id, const char *app_name) {
                     styleMask:NSWindowStyleMaskNonactivatingPanel | NSWindowStyleMaskBorderless
                       backing:NSBackingStoreBuffered
                         defer:NO];
-      g_loader.level             = NSScreenSaverWindowLevel;
+      g_loader.level             = NSNormalWindowLevel;
       g_loader.backgroundColor   = KG_BG;
       g_loader.opaque            = YES;
       g_loader.hasShadow         = NO;
@@ -193,40 +193,68 @@ void platform_launch_app_async(const char *bundle_id,
   // Capture bid for the staleness check below.
   NSString *launch_bid = bid;
 
+  // Step 1: listen for the process to appear via NSWorkspaceDidLaunchApplicationNotification.
+  // This fires the instant the app registers with the workspace — no polling needed.
+  __block id launch_observer = nil;
+
+  launch_observer = [[[NSWorkspace sharedWorkspace] notificationCenter]
+      addObserverForName:NSWorkspaceDidLaunchApplicationNotification
+                  object:nil
+                   queue:nil
+              usingBlock:^(NSNotification *note) {
+                NSRunningApplication *app = note.userInfo[NSWorkspaceApplicationKey];
+                if (![app.bundleIdentifier isEqualToString:launch_bid]) return;
+
+                // Remove the launch observer — we have our process.
+                [[[NSWorkspace sharedWorkspace] notificationCenter]
+                    removeObserver:launch_observer];
+
+                int pid = (int)app.processIdentifier;
+
+                // Step 2: check isFinishedLaunching — may already be YES for
+                // fast apps. If not, spin at low cost until it flips.
+                if (app.isFinishedLaunching) {
+                  dispatch_async(dispatch_get_main_queue(), ^{
+                    if ([g_loading_bid isEqualToString:launch_bid]) {
+                      platform_fill_window(pid);
+                      platform_hide_loader();
+                    }
+                    cb(pid, ctx);
+                  });
+                  return;
+                }
+
+                // Not yet finished — observe until it is.
+                // Poll isFinishedLaunching on a background queue at low cost.
+                // This is the only remaining poll, and it's bounded by the app's
+                // own startup — typically sub-second once the process exists.
+                dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+                  while (!app.isFinishedLaunching) {
+                    usleep(100000);  // 100ms — checking a bool, near zero cost
+                  }
+                  dispatch_async(dispatch_get_main_queue(), ^{
+                    if ([g_loading_bid isEqualToString:launch_bid]) {
+                      platform_fill_window(pid);
+                      platform_hide_loader();
+                    }
+                    cb(pid, ctx);
+                  });
+                });
+              }];
+
   [[NSWorkspace sharedWorkspace]
       openApplicationAtURL:url
              configuration:cfg
          completionHandler:^(NSRunningApplication *app, NSError *err) {
-           int pid = app ? (int)app.processIdentifier : -1;
-
-           if (pid == -1) {
+           // If the launch outright failed, clean up and bail.
+           if (!app) {
+             [[[NSWorkspace sharedWorkspace] notificationCenter]
+                 removeObserver:launch_observer];
              dispatch_async(dispatch_get_main_queue(), ^{
                if ([g_loading_bid isEqualToString:launch_bid]) platform_hide_loader();
                cb(-1, ctx);
              });
-             return;
            }
-
-           // Poll for the window on a background thread — don't block main.
-           dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-             AXUIElementRef ax_app = AXUIElementCreateApplication((pid_t)pid);
-             AXUIElementRef window = NULL;
-             for (int i = 0; i < 40 && !window; i++) {
-               usleep(100000);  // 100ms × 40 = 4s max
-               window = find_window(ax_app);
-             }
-             CFRelease(ax_app);
-             if (window) CFRelease(window);
-
-             dispatch_async(dispatch_get_main_queue(), ^{
-               // Only fill if this launch is still the active one.
-               if ([g_loading_bid isEqualToString:launch_bid]) {
-                 platform_fill_window(pid);
-                 platform_hide_loader();
-               }
-               cb(pid, ctx);
-             });
-           });
          }];
 }
 
@@ -757,44 +785,15 @@ void platform_snap_window(int pid) {
 
 // ---------------------------------------------------------------------------
 
-void platform_fill_window(int pid) {
-  AXUIElementRef ax_app = AXUIElementCreateApplication((pid_t)pid);
+static void fill_window_on_main(int pid, AXUIElementRef window) {
+  // Must be called on main queue.
+  // Hide loader atomically with the window snap.
+  if (g_loader) [g_loader orderOut:nil];
 
-  AXUIElementRef window = find_window(ax_app);
-
-  // App is running but has no windows (red-buttoned). Tell it to reopen.
-  if (!window) {
-    NSRunningApplication *app =
-        [NSRunningApplication runningApplicationWithProcessIdentifier:(pid_t)pid];
-    if (app) {
-      NSWorkspaceOpenConfiguration *cfg = [NSWorkspaceOpenConfiguration configuration];
-      cfg.activates = YES;
-      [[NSWorkspace sharedWorkspace]
-          openApplicationAtURL:app.bundleURL
-                 configuration:cfg
-             completionHandler:nil];
-    }
-    // Poll up to 2 seconds for the window to appear.
-    for (int i = 0; i < 20 && !window; i++) {
-      usleep(100000);
-      window = find_window(ax_app);
-    }
-  }
-
-  if (!window) {
-    CFRelease(ax_app);
-    return;
-  }
-
-  // Use mouse position to determine target screen — the user is switching
-  // from their current screen, so the window should follow them there.
   NSPoint mouse = [NSEvent mouseLocation];
   NSScreen *target_screen = nil;
   for (NSScreen *s in [NSScreen screens]) {
-    if (NSMouseInRect(mouse, s.frame, NO)) {
-      target_screen = s;
-      break;
-    }
+    if (NSMouseInRect(mouse, s.frame, NO)) { target_screen = s; break; }
   }
   if (!target_screen) target_screen = [NSScreen mainScreen];
 
@@ -802,21 +801,16 @@ void platform_fill_window(int pid) {
   CGPoint origin = CGPointMake(r.origin.x, r.origin.y);
   CGSize size = CGSizeMake(r.size.width, r.size.height);
 
-  // Get PSN from pid — deprecated but functional on macOS 26.
   ProcessSerialNumber psn = {0, 0};
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
   OSStatus psn_err = GetProcessForPID((pid_t)pid, &psn);
 #pragma clang diagnostic pop
-  if (psn_err != 0) {
-    CFRelease(window);
-    CFRelease(ax_app);
-    return;
-  }
-  AXValueRef pos_val = AXValueCreate(kAXValueCGPointType, &origin);
+  if (psn_err != 0) { CFRelease(window); return; }
+
+  AXValueRef pos_val  = AXValueCreate(kAXValueCGPointType, &origin);
   AXValueRef size_val = AXValueCreate(kAXValueCGSizeType, &size);
 
-  // Freeze compositor — resize, focus, raise all land in one frame.
   int cid = SLSMainConnectionID();
   SLSDisableUpdate(cid);
 
@@ -841,5 +835,46 @@ void platform_fill_window(int pid) {
   CFRelease(pos_val);
   CFRelease(size_val);
   CFRelease(window);
-  CFRelease(ax_app);
+}
+
+void platform_fill_window(int pid) {
+  // Do all slow work (find window, reopen if red-buttoned) on a background
+  // queue so main is never blocked. Only the AX set + SkyLight calls land
+  // on main, and they're microseconds.
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+    AXUIElementRef ax_app = AXUIElementCreateApplication((pid_t)pid);
+    AXUIElementRef window = find_window(ax_app);
+    CFRelease(ax_app);
+
+    // App is running but has no windows (red-buttoned). Tell it to reopen.
+    if (!window) {
+      NSRunningApplication *app =
+          [NSRunningApplication runningApplicationWithProcessIdentifier:(pid_t)pid];
+      if (app) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+          NSWorkspaceOpenConfiguration *cfg = [NSWorkspaceOpenConfiguration configuration];
+          cfg.activates = YES;
+          [[NSWorkspace sharedWorkspace]
+              openApplicationAtURL:app.bundleURL
+                     configuration:cfg
+                 completionHandler:nil];
+        });
+      }
+      // Poll for window off main — does not block anything.
+      ax_app = AXUIElementCreateApplication((pid_t)pid);
+      for (int i = 0; i < 20 && !window; i++) {
+        usleep(100000);
+        window = find_window(ax_app);
+      }
+      CFRelease(ax_app);
+    }
+
+    if (!window) return;
+
+    // Retain window across the dispatch boundary.
+    CFRetain(window);
+    dispatch_async(dispatch_get_main_queue(), ^{
+      fill_window_on_main(pid, window);  // releases window
+    });
+  });
 }

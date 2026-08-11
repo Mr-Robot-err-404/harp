@@ -42,10 +42,11 @@ Search :: struct {
 	active:  i32,
 }
 State :: struct {
-	bindings: [dynamic]Binding,
-	overlay:  Overlay,
-	search:   Search,
-	modal:    Open,
+	bindings:          [dynamic]Binding,
+	overlay:           Overlay,
+	search:            Search,
+	modal:             Open,
+	loading_bundle_id: cstring,
 }
 app_names: [MAX_APPS]cstring
 app_bundle_ids: [MAX_APPS]cstring
@@ -98,18 +99,32 @@ main :: proc() {
 	CFRunLoopRun()
 }
 
-switch_to :: proc(bundle_id: cstring) {
-	pid := platform_find_app(bundle_id)
-
-	if pid == -1 {
-		fmt.println("[harp] launching", bundle_id)
-		pid = platform_launch_app(bundle_id)
-		if pid == -1 {
-			fmt.println("[harp] failed to launch", bundle_id)
-			return
-		}
+switch_to :: proc(s: ^State, bundle_id: cstring) {
+	if string(s.loading_bundle_id) == string(bundle_id) {
+		platform_show_loader(bundle_id, platform_app_name(bundle_id))
+		return
 	}
-	platform_fill_window(pid)
+	platform_hide_loader()
+	s.loading_bundle_id = ""
+
+	pid := platform_find_app(bundle_id)
+	if pid != -1 {
+		platform_fill_window(pid)
+		return
+	}
+	fmt.println("[harp] launching", bundle_id)
+	s.loading_bundle_id = bundle_id
+	platform_show_loader(bundle_id, platform_app_name(bundle_id))
+	platform_launch_app_async(bundle_id, on_launch_complete, s)
+}
+
+on_launch_complete :: proc "c" (pid: i32, ctx: rawptr) {
+	context = runtime.default_context()
+	s := (^State)(ctx)
+	s.loading_bundle_id = ""
+	if pid == -1 {
+		fmt.println("[harp] failed to launch app")
+	}
 }
 
 on_key :: proc "c" (
@@ -137,7 +152,7 @@ on_key :: proc "c" (
 		case kVK_Return:
 			s.modal = .None
 			platform_hide_overlay()
-			switch_to(s.bindings[s.overlay.active].bundle_id)
+			switch_to(s, s.bindings[s.overlay.active].bundle_id)
 
 		case kVK_ANSI_X:
 			defer refresh_overlay(s)
@@ -212,7 +227,7 @@ on_key :: proc "c" (
 		case kVK_Return:
 			s.modal = .None
 			platform_hide_search()
-			switch_to(s.search.results[s.search.active].bundle_id)
+			switch_to(s, s.search.results[s.search.active].bundle_id)
 			clear_search_state(s)
 			return nil
 		}
@@ -273,7 +288,7 @@ on_key :: proc "c" (
 				&s.bindings,
 				Binding{key = keys[idx], bundle_id = strings.clone_to_cstring(string(app))},
 			)
-			switch_to(s.bindings[idx].bundle_id)
+			switch_to(s, s.bindings[idx].bundle_id)
 			return nil
 
 		case kVK_ANSI_Semicolon:
@@ -285,7 +300,7 @@ on_key :: proc "c" (
 		for b in s.bindings {
 			if b.bundle_id == EMPTY_BINDING {continue}
 			if keycode == b.key {
-				switch_to(b.bundle_id)
+				switch_to(s, b.bundle_id)
 				return nil
 			}
 		}
