@@ -16,6 +16,17 @@ extern CGError SLPSPostEventRecordTo(ProcessSerialNumber *psn, uint8_t *bytes);
 
 #define kCPSUserGenerated 0x200
 
+// Kanagawa palette — defined here so loader and overlay can both use them.
+#define KG_BG    [NSColor colorWithRed:0x1a/255.0 green:0x1b/255.0 blue:0x26/255.0 alpha:1.0]
+#define KG_HL    [NSColor colorWithRed:0x2d/255.0 green:0x4f/255.0 blue:0x67/255.0 alpha:1.0]
+#define KG_FG    [NSColor colorWithRed:0xc0/255.0 green:0xca/255.0 blue:0xf5/255.0 alpha:1.0]
+#define KG_DIM   [NSColor colorWithRed:0x56/255.0 green:0x5f/255.0 blue:0x89/255.0 alpha:1.0]
+#define KG_ACT   [NSColor colorWithRed:0x7d/255.0 green:0xcf/255.0 blue:0xff/255.0 alpha:1.0]
+#define KG_MOV   [NSColor colorWithRed:0xe6/255.0 green:0xc3/255.0 blue:0x84/255.0 alpha:1.0]
+#define KG_DEL   [NSColor colorWithRed:0xff/255.0 green:0x5d/255.0 blue:0x62/255.0 alpha:1.0]
+
+static AXUIElementRef find_window(AXUIElementRef ax_app);
+
 int platform_check_accessibility(void) {
   NSDictionary *opts = @{(__bridge id)kAXTrustedCheckOptionPrompt : @NO};
   return AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)opts) ? 1 : 0;
@@ -44,7 +55,7 @@ int platform_launch_app(const char *bundle_id) {
 
   NSWorkspaceOpenConfiguration *cfg =
       [NSWorkspaceOpenConfiguration configuration];
-  cfg.activates = YES; // let OS handle initial activation; we snap on top after
+  cfg.activates = YES;
 
   dispatch_semaphore_t sem = dispatch_semaphore_create(0);
   __block int pid = -1;
@@ -61,6 +72,162 @@ int platform_launch_app(const char *bundle_id) {
   dispatch_semaphore_wait(sem,
                           dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC));
   return pid;
+}
+
+// ---------------------------------------------------------------------------
+// Loader panel
+
+@interface HarpLoaderView : NSView
+@property (nonatomic, strong) NSString      *appName;
+@property (nonatomic, strong) NSProgressIndicator *spinner;
+@end
+
+@implementation HarpLoaderView
+
+- (instancetype)initWithFrame:(NSRect)frame appName:(NSString *)name {
+  self = [super initWithFrame:frame];
+  if (self) {
+    _appName = name;
+
+    _spinner = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(0, 0, 32, 32)];
+    _spinner.style = NSProgressIndicatorStyleSpinning;
+    _spinner.controlSize = NSControlSizeRegular;
+    [_spinner startAnimation:nil];
+    [self addSubview:_spinner];
+  }
+  return self;
+}
+
+- (void)layout {
+  [super layout];
+  CGFloat cx = self.bounds.size.width  / 2;
+  CGFloat cy = self.bounds.size.height / 2;
+  _spinner.frame = NSMakeRect(cx - 16, cy + 16, 32, 32);
+}
+
+- (void)drawRect:(NSRect)dirtyRect {
+  [KG_BG setFill];
+  NSRectFill(self.bounds);
+
+  CGFloat cx = self.bounds.size.width  / 2;
+  CGFloat cy = self.bounds.size.height / 2;
+
+  NSDictionary *attrs = @{
+    NSFontAttributeName:            [NSFont systemFontOfSize:18 weight:NSFontWeightMedium],
+    NSForegroundColorAttributeName: KG_DIM,
+  };
+  NSSize sz = [_appName sizeWithAttributes:attrs];
+  [_appName drawAtPoint:NSMakePoint(cx - sz.width / 2, cy - 16) withAttributes:attrs];
+}
+
+@end
+
+static NSPanel *g_loader       = nil;
+static NSString *g_loading_bid = nil;  // bundle_id currently being loaded, nil if none
+
+static NSRect loader_frame(void) {
+  NSPoint mouse = [NSEvent mouseLocation];
+  NSScreen *screen = nil;
+  for (NSScreen *s in [NSScreen screens]) {
+    if (NSMouseInRect(mouse, s.frame, NO)) { screen = s; break; }
+  }
+  if (!screen) screen = [NSScreen mainScreen];
+  return screen.frame;  // full screen, not visibleFrame — covers menubar too
+}
+
+void platform_show_loader(const char *bundle_id, const char *app_name) {
+  NSString *bid  = [NSString stringWithUTF8String:bundle_id];
+  NSString *name = [NSString stringWithUTF8String:app_name];
+
+  dispatch_async(dispatch_get_main_queue(), ^{
+    g_loading_bid = bid;
+
+    NSRect frame = loader_frame();
+
+    if (!g_loader) {
+      g_loader = [[NSPanel alloc]
+          initWithContentRect:frame
+                    styleMask:NSWindowStyleMaskNonactivatingPanel | NSWindowStyleMaskBorderless
+                      backing:NSBackingStoreBuffered
+                        defer:NO];
+      g_loader.level             = NSScreenSaverWindowLevel;
+      g_loader.backgroundColor   = KG_BG;
+      g_loader.opaque            = YES;
+      g_loader.hasShadow         = NO;
+      g_loader.releasedWhenClosed = NO;
+    }
+
+    HarpLoaderView *view = [[HarpLoaderView alloc] initWithFrame:NSMakeRect(0, 0, frame.size.width, frame.size.height)
+                                                         appName:name];
+    g_loader.contentView = view;
+    [g_loader setFrame:frame display:NO];
+    [g_loader orderFrontRegardless];
+  });
+}
+
+void platform_hide_loader(void) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    g_loading_bid = nil;
+    [g_loader orderOut:nil];
+  });
+}
+
+// Async launch — fires open on a background queue, polls for a window,
+// then on the main queue: fills + hides loader + calls back into Odin.
+// cb receives pid (-1 on failure) and the ctx pointer.
+// If g_loading_bid no longer matches by the time we land on main, we skip
+// fill+hide so a superseding switch isn't disturbed.
+void platform_launch_app_async(const char *bundle_id,
+                                void (*cb)(int pid, void *ctx),
+                                void *ctx) {
+  NSString *bid = [NSString stringWithUTF8String:bundle_id];
+  NSURL *url = [[NSWorkspace sharedWorkspace] URLForApplicationWithBundleIdentifier:bid];
+  if (!url) {
+    cb(-1, ctx);
+    return;
+  }
+
+  NSWorkspaceOpenConfiguration *cfg = [NSWorkspaceOpenConfiguration configuration];
+  cfg.activates = NO;  // we handle focus ourselves via platform_fill_window
+
+  // Capture bid for the staleness check below.
+  NSString *launch_bid = bid;
+
+  [[NSWorkspace sharedWorkspace]
+      openApplicationAtURL:url
+             configuration:cfg
+         completionHandler:^(NSRunningApplication *app, NSError *err) {
+           int pid = app ? (int)app.processIdentifier : -1;
+
+           if (pid == -1) {
+             dispatch_async(dispatch_get_main_queue(), ^{
+               if ([g_loading_bid isEqualToString:launch_bid]) platform_hide_loader();
+               cb(-1, ctx);
+             });
+             return;
+           }
+
+           // Poll for the window on a background thread — don't block main.
+           dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+             AXUIElementRef ax_app = AXUIElementCreateApplication((pid_t)pid);
+             AXUIElementRef window = NULL;
+             for (int i = 0; i < 40 && !window; i++) {
+               usleep(100000);  // 100ms × 40 = 4s max
+               window = find_window(ax_app);
+             }
+             CFRelease(ax_app);
+             if (window) CFRelease(window);
+
+             dispatch_async(dispatch_get_main_queue(), ^{
+               // Only fill if this launch is still the active one.
+               if ([g_loading_bid isEqualToString:launch_bid]) {
+                 platform_fill_window(pid);
+                 platform_hide_loader();
+               }
+               cb(pid, ctx);
+             });
+           });
+         }];
 }
 
 CGRect platform_screen_rect(void) {
@@ -173,15 +340,6 @@ int platform_get_all_apps(const char **names_out, const char **bundle_ids_out, i
 // ---------------------------------------------------------------------------
 // Overlay
 // ---------------------------------------------------------------------------
-
-// Kanagawa palette
-#define KG_BG    [NSColor colorWithRed:0x1a/255.0 green:0x1b/255.0 blue:0x26/255.0 alpha:1.0]
-#define KG_HL    [NSColor colorWithRed:0x2d/255.0 green:0x4f/255.0 blue:0x67/255.0 alpha:1.0]
-#define KG_FG    [NSColor colorWithRed:0xc0/255.0 green:0xca/255.0 blue:0xf5/255.0 alpha:1.0]
-#define KG_DIM   [NSColor colorWithRed:0x56/255.0 green:0x5f/255.0 blue:0x89/255.0 alpha:1.0]
-#define KG_ACT   [NSColor colorWithRed:0x7d/255.0 green:0xcf/255.0 blue:0xff/255.0 alpha:1.0]
-#define KG_MOV   [NSColor colorWithRed:0xe6/255.0 green:0xc3/255.0 blue:0x84/255.0 alpha:1.0]  // Kanagawa yellow — moving
-#define KG_DEL   [NSColor colorWithRed:0xff/255.0 green:0x5d/255.0 blue:0x62/255.0 alpha:1.0]  // Kanagawa red — deleting
 
 // Item states — must match Odin enum order.
 #define ITEM_STATE_NONE     0

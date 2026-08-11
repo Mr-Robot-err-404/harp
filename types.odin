@@ -140,8 +140,11 @@ foreign platform {
 	platform_request_accessibility :: proc "c" () -> i32 ---
 	platform_find_app :: proc "c" (bundle_id: cstring) -> i32 ---
 	platform_launch_app :: proc "c" (bundle_id: cstring) -> i32 ---
-	platform_fill_window :: proc "c" (pid: i32) ---
-	platform_snap_window :: proc "c" (pid: i32) ---
+	platform_fill_window              :: proc "c" (pid: i32) ---
+	platform_snap_window              :: proc "c" (pid: i32) ---
+	platform_show_loader              :: proc "c" (bundle_id: cstring, app_name: cstring) ---
+	platform_hide_loader              :: proc "c" () ---
+	platform_launch_app_async         :: proc "c" (bundle_id: cstring, cb: proc "c" (pid: i32, ctx: rawptr), ctx: rawptr) ---
 	platform_register_screen_change_handler :: proc "c" (cb: proc "c" (ctx: rawptr), ctx: rawptr) ---
 	platform_show_overlay :: proc "c" (keys: [^]cstring, names: [^]cstring, states: [^]i32, count: i32, active: i32) ---
 
